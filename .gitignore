@@ -1,0 +1,26 @@
+# --- Python env (locale per ogni dev)
+.venv/
+
+# --- Cache / build Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.build/
+dist/
+
+# --- Editor / OS
+.DS_Store
+Thumbs.db
+
+# --- VS Code (ignora tutto tranne settings.json utile al team)
+.vscode/*
+!.vscode/settings.json
+
+# --- Excel temporanei
+~$*
+*.tmp
+
+# --- Segreti (se usi env vars)
+.env
