@@ -1,5 +1,8 @@
 import pandas as pd
+import numpy as np
 import datetime
+
+
 
 def upload_dataset(path):
     xls = pd.ExcelFile(path)
@@ -13,6 +16,89 @@ def upload_dataset(path):
     result_df = pd.concat(dfs, ignore_index=True)
     return result_df
 
+
+
+
+def cyclical_encoding(df, date_col="dt_iso"):
+    """
+    Applica l'encoding ciclico per i cicli GIORNALIERO e ANNUALE.
+
+    Questa versione semplificata ignora la gestione degli anni bisestili
+    per il ciclo annuale, assumendo sempre un anno di 365 giorni.
+
+    Motivazione:
+    - Il ciclo giornaliero (ora) determina la presenza/assenza del sole.
+    - Il ciclo annuale (giorno dell'anno) determina la stagionalità (inverno/estate).
+    """
+    
+    # 1. Assicurati che la colonna sia in formato datetime
+    # errors='coerce' gestisce eventuali errori di parsing
+    df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    
+    
+    # --- 2. Ciclo Giornaliero (basato sull'ora) ---
+    # Calcoliamo la frazione del giorno (da 0.0 a 0.999...)
+    # Questo calcolo è preciso al secondo.
+    day_fraction = (
+        df[date_col].dt.hour / 24.0 + 
+        df[date_col].dt.minute / 1440.0 + 
+        df[date_col].dt.second / 86400.0
+    )
+    
+    # Applichiamo sin/cos
+    df['day_sin'] = np.sin(2 * np.pi * day_fraction)
+    df['day_cos'] = np.cos(2 * np.pi * day_fraction)
+    
+    
+    # --- 3. Ciclo Annuale (basato sul giorno dell'anno) ---
+    # Usiamo .dt.dayofyear (es. 1 per 1° Gen, 365 per 31 Dic)
+    # Normalizziamo dividendo semplicemente per 365.
+    
+    # Motivazione della Semplificazione:
+    # Si assume che il ciclo si ripeta ogni 365 giorni.
+    # L'attributo .dt.dayofyear va da 1 a 365 (o 366 nei bisestili).
+    # Dividendo per 365, il valore sarà circa [0.0027, 1.0] in un anno normale
+    # e circa [0.0027, 1.0027] in un anno bisestile.
+    # L'impatto di questa piccola differenza è trascurabile per il modello.
+    
+    year_fraction = df[date_col].dt.dayofyear / 365.0
+    
+    # Applichiamo sin/cos
+    df['year_sin'] = np.sin(2 * np.pi * year_fraction)
+    df['year_cos'] = np.cos(2 * np.pi * year_fraction)
+    
+    return df   
+
+def remove_columns(df, columns_to_remove):
+    df.drop(columns=columns_to_remove, inplace=True)
+
+    return df
+    
+
+
+    
+def dummy_variable(df, column):
+    # Applica la codifica One-Hot alla colonna modificata
+    dummy_cols = pd.get_dummies(df[column], 
+                                prefix=column, 
+                                dtype=int)
+
+    # Unisci le nuove colonne dummy al DataFrame
+    df = pd.concat([df, dummy_cols], axis=1)
+
+    df=df.drop(columns=[column])
+
+
+    # Se non ti serve più la colonna originale (che ora ha i valori raggruppati), puoi eliminarla:
+    # df.drop(columns=[COLONNA], inplace=True) 
+
+    print("✅ La colonna 'weather_description' è stata sovrascritta con 'other' per i valori rari e le dummy create.")
+
+    return df
+
+
+
+#-----------main standalone--------------------------------
 pv_path='Data/pv_dataset.xlsx'
 wx_path='Data/wx_dataset.xlsx'
 
@@ -35,7 +121,64 @@ tz_fixed = datetime.timezone(datetime.timedelta(hours=10))    # Sydney (erano mi
 df_merged['dt_iso'] = df_merged['dt_iso'].dt.tz_convert(tz_fixed)  # tutti i record con lo stesso fuso
                                                                    # orario +10 (c'era l'ora legale +11)
 df_merged.to_csv('Data/merge_ds.csv')
-#df_merged.to_excel('Data/merge_ds.xlsx') # il tipo datetime rompe il cazzo con excel
-print(df_merged)
-print(df_merged.loc[2260][0])
-print(df_merged.dtypes)
+
+
+# ENCODING CICLICO
+cyclical_df= cyclical_encoding(df_merged)
+cyclical_df.to_csv('Data/cyclical_ds.csv')
+###############################################
+
+
+valori_unici_lat = cyclical_df['lat'].unique()
+print(valori_unici_lat)
+valori_unici_lon = cyclical_df['lon'].unique()
+print(valori_unici_lon)
+
+#RIMOZIONE COLONNE LAT E LON
+columns_to_remove = ['lat', 'lon','dt_iso']
+adjusted_df = remove_columns(cyclical_df, columns_to_remove)
+##################################################################
+
+# CREAZIONE DUMMY VARIABLE PER COLONNA WEATHER_DESCRIPTION
+COLONNA = 'weather_description'
+# Lista delle categorie che DEVI mantenere
+categorie_principali = [
+    'sky is clear', 
+    'light rain', 
+    'overcast clouds', 
+    'scattered clouds', 
+    'broken clouds', 
+    'few clouds', 
+    'moderate rain', 
+    'haze'
+]
+# Crea una condizione Booleana: True per i valori che SONO tra i principali
+condizione_principale = adjusted_df[COLONNA].isin(categorie_principali)
+# Applica .mask():
+# Dove la condizione è *False* (cioè i valori *non* sono principali), 
+# sostituisci il valore con 'other'. L'assegnazione è fatta in-place.
+adjusted_df[COLONNA] = adjusted_df[COLONNA].mask(
+    ~condizione_principale,  # ~ è l'operatore NOT, quindi seleziona i NON-principali
+    other='other'
+)
+adjusted_df=dummy_variable(adjusted_df, COLONNA)
+#############################################################################
+
+
+
+adjusted_df['rain_1h'] = adjusted_df['rain_1h'].fillna(0)
+
+
+
+
+
+# Sostituisci i valori NaN nella colonna 'rain_1h' con 0.
+# Questo è utile perché la mancanza di dati sulla pioggia (NaN)
+# spesso significa che non c'è stata pioggia (0 mm).
+adjusted_df['rain_1h'] = adjusted_df['rain_1h'].fillna(0)
+
+
+
+adjusted_df.to_csv('Data/adjusted_ds.csv')
+
+adjusted_df.to_excel('Data/adjusted_ds.xlsx')
