@@ -1,4 +1,5 @@
 numpy==2.3.4
+openpyxl==3.1.5
 pandas==2.3.3
 python-dateutil==2.9.0.post0
 pytz==2025.2
