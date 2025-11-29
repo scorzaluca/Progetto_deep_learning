@@ -1,0 +1,34 @@
+import pandas as pd
+import datetime
+
+
+class uploader():
+    def __init__(self, path: str):
+        self.path = path
+
+    def upload_dataset(self):
+        xls = pd.ExcelFile(self.path)
+        dfs = []
+
+        for sh in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sh)
+            dfs.append(df)
+
+        # Concatena ignorando l'indice originale
+        result_df = pd.concat(dfs, ignore_index=True)
+        return result_df
+    
+    def merge_dataset(self,pv_path,wx_path):
+        df_pv=self.upload_dataset(pv_path)
+        df_pv.columns=['datetime','pv_power']
+        df_wx=self.upload_dataset(wx_path)
+        df_list= [df_wx, df_pv]
+        df_merged = pd.concat(df_list, axis=1)
+        df_merged.drop(columns=['datetime'], inplace=True)  # levo quella del df_pv perchè aveva gli orari non
+                                                            # precisi anche se dal file excel non si vedeva
+        df_merged['dt_iso'] = pd.to_datetime(df_merged['dt_iso'], utc=True, errors='raise')
+        tz_fixed = datetime.timezone(datetime.timedelta(hours=10))    # Sydney (erano misti +10/+11)
+        df_merged['dt_iso'] = df_merged['dt_iso'].dt.tz_convert(tz_fixed)  # tutti i record con lo stesso fuso
+                                                                        # orario +10 (c'era l'ora legale +11)
+        df_merged.to_csv('data/processed/merge_ds.csv')
+        return df_merged
