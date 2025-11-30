@@ -2,7 +2,7 @@ import pandas as pd
 import datetime
 
 
-class uploader():
+class Uploader:
     def __init__(self):
         pass
 
@@ -33,3 +33,4 @@ class uploader():
                                                                         # orario +10 (c'era l'ora legale +11)
         df_merged.to_csv('data/processed/merge_ds.csv')
         return df_merged
+    
