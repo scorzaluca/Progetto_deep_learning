@@ -1,5 +1,5 @@
-DATA_PATH = 'data/raw/wx_dataset.csv'
-LABEL_PATH='data/raw/pv_dataset.csv'
+DATA_PATH = 'data/raw/wx_dataset.xlsx'
+LABEL_PATH='data/raw/pv_dataset.xlsx'
 
 
 # --- PARAMETRI STRUTTURALI DEL DATASET ---
@@ -11,7 +11,7 @@ TARGET_COL = 'pv_power'
 
 DATE_COL = 'dt_iso'
 COLUMNS_TO_REMOVE = ['lat', 'lon', DATE_COL]
-DUMMY_COLUMN=['weather_description']
+DUMMY_COLUMN='weather_description'
 FILLNA_COLUMN=['rain_1h']
 
 
@@ -49,5 +49,5 @@ EPOCHS = 50         # Numero di epoche per il training
 LEARNING_RATE = 0.001
 
 # --- PERCORSI FILE ---
-DATA_PATH = 'adjusted_ds.csv'
+
 RESULTS_DIR = './results/'

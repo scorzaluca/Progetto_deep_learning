@@ -3,6 +3,11 @@ import numpy as np
 
 
 
+
+
+
+
+
 class preprocesser():
     def __init__(self, df: pd.DataFrame, preprocess_config: dict):
         self.df=df
@@ -63,10 +68,29 @@ class preprocesser():
         return self.df   
     
     def remove_columns(self):
-        self.df.drop(self.columns_to_remove, inplace=True)
+        self.df.drop(self.columns_to_remove, axis=1, inplace=True)
         return self.df
     
     def dummy_variable(self):
+        categorie_principali = [
+            'sky is clear', 
+            'light rain', 
+            'overcast clouds', 
+            'scattered clouds', 
+            'broken clouds', 
+            'few clouds', 
+            'moderate rain', 
+            'haze'
+        ]
+        # Crea una condizione Booleana: True per i valori che SONO tra i principali
+        condizione_principale = self.df[self.dummy_column].isin(categorie_principali)
+        # Applica .mask():
+        # Dove la condizione è *False* (cioè i valori *non* sono principali), 
+        # sostituisci il valore con 'other'. L'assegnazione è fatta in-place.
+        self.df[self.dummy_column] = self.df[self.dummy_column].mask(
+            ~condizione_principale,  # ~ è l'operatore NOT, quindi seleziona i NON-principali
+            other='other'
+        )
         # Applica la codifica One-Hot alla colonna modificata
         dummy_cols = pd.get_dummies(self.df[self.dummy_column], 
                                     prefix=self.dummy_column, 
@@ -75,7 +99,7 @@ class preprocesser():
         # Unisci le nuove colonne dummy al DataFrame
         df = pd.concat([self.df, dummy_cols], axis=1)
 
-        df=df.drop(columns=[self.dummy_column])
+        self.df=df.drop(columns=self.dummy_column)
 
 
         # Se non ti serve più la colonna originale (che ora ha i valori raggruppati), puoi eliminarla:
@@ -90,7 +114,7 @@ class preprocesser():
         return self.df
 
 
-    #ASSICURATI CHE LA LOGICA DEL MAIN STANDALONE QUI NELLA FUNZIONE
+    
     def run(self):
         self.cyclical_encoding()
         self.remove_columns()
@@ -125,14 +149,17 @@ class preprocesser():
 
 '''#-----------main standalone--------------------------------
 pv_path='data/raw/pv_dataset.xlsx'
-wx_path='data//raw/wx_dataset.xlsx'
+wx_path='data/raw/wx_dataset.xlsx'
 
-df_pv=upload_dataset(pv_path)
+
+df_uploader=uploader()
+df_pv=df_uploader._upload_dataset(pv_path)
+print(df_pv.info())
 df_pv.columns=['datetime','pv_power']
 #df_pv.to_csv('Data/pv_ds.csv')
 #print(df_pv)
-
-df_wx=upload_dataset(wx_path)
+'''
+'''df_wx=upload_dataset(wx_path)
 #df_wx.to_csv('Data/wx_ds.csv')
 #print(df_wx)
 
