@@ -2,6 +2,9 @@ import pandas as pd
 import datetime
 
 
+DATA_PATH = "data/raw/wx_dataset.xlsx"
+LABEL_PATH = "data/raw/pv_dataset.xlsx"
+
 class Uploader:
     def __init__(self):
         pass
@@ -34,3 +37,8 @@ class Uploader:
         df_merged.to_csv('data/processed/merge_ds.csv')
         return df_merged
     
+if __name__ == "__main__":
+    df_uploader = Uploader()
+    dataset = df_uploader.merge_dataset(DATA_PATH, LABEL_PATH)
+    dataset.to_csv("data/raw/merge_ds.csv")
+    dataset.to_excel("data/raw/merge_ds.xlsx")
