@@ -1,5 +1,3 @@
-# File: src/__init__.py
-
 # 1. Importo dal pacchetto 'data_loading' (la cartella)
 # Nota: Qui Python va a leggere src/data_loading/__init__.py
 from .Data_loading import PVForecastDataset, TS_Cross_Validator
