@@ -132,5 +132,6 @@ if __name__ == "__main__":
     dataset = pd.read_csv("data/raw/merge_ds.csv")
     preprocess = Preprocesser(dataset, PREPROCESS_CONFIG)
     adjusted_df = preprocess.run()
+    print(list(adjusted_df.columns).index("pv_power"))
     adjusted_df.to_csv("data/processed/Adjusted_ds.csv")
     adjusted_df.to_excel("data/processed/Adjusted_ds.xlsx")
