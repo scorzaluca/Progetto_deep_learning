@@ -15,6 +15,8 @@ class preprocesser():
         self.columns_to_remove=preprocess_config.get('columns_to_remove')
         self.dummy_column=preprocess_config.get('dummy_column')
         self.fillna_column=preprocess_config.get('fill_na_column')
+        self.Ghi=preprocess_config.get('Ghi')
+        self.pv_power=preprocess_config.get('pv_power')
 
 
     def cyclical_encoding(self):
@@ -112,14 +114,20 @@ class preprocesser():
     def fillnan(self):
         self.df[self.fillna_column]=self.df[self.fillna_column].fillna(0)
         return self.df
-
-
     
+    def night_filter(self):
+        df = df.copy()
+        mask = df[self.Ghi] == 0
+        df.loc[mask, self.pv_power] = 0
+        return df
+
+
     def run(self):
         self.cyclical_encoding()
         self.remove_columns()
         self.dummy_variable()
         self.fillnan()
+        self.night_filter()
         return self.df
 
         
