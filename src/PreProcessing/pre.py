@@ -1,13 +1,5 @@
 import pandas as pd
 import numpy as np
-
-
-
-
-
-
-
-
 class preprocesser():
     def __init__(self, df: pd.DataFrame, preprocess_config: dict):
         self.df=df
@@ -112,6 +104,7 @@ class preprocesser():
     def fillnan(self):
         self.df[self.fillna_column]=self.df[self.fillna_column].fillna(0)
         return self.df
+    
 
 
     

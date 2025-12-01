@@ -9,8 +9,8 @@ class PVForecastDataset(Dataset):
         self, 
         data: pd.DataFrame, 
         target_col: str, 
-        lookback: int = 168, 
-        horizon: int = 24,
+        lookback: int , 
+        horizon: int ,
         step: int = 1
     ):
         
