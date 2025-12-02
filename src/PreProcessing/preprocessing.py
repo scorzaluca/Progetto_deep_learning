@@ -133,5 +133,5 @@ if __name__ == "__main__":
     preprocess = Preprocesser(dataset, PREPROCESS_CONFIG)
     adjusted_df = preprocess.run()
     print(list(adjusted_df.columns).index("pv_power"))
-    adjusted_df.to_csv("data/processed/Adjusted_ds.csv")
-    adjusted_df.to_excel("data/processed/Adjusted_ds.xlsx")
+    adjusted_df.to_csv("data/processed/adjusted_ds.csv")
+    adjusted_df.to_excel("data/processed/adjusted_ds.xlsx")

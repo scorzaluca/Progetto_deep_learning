@@ -48,9 +48,23 @@ LSTM_CONFIG = {
     "batch_first": True,
 }
 
+# --- DLINEAR PARAMETERS ---
+
+DLINEAR_CONFIG = {
+    "lookback": LOOKBACK,  # 48 ore di storia
+    "horizon": HORIZON,    # 24 ore di previsione
+    "input_size": 10,      # Numero di feature in input
+    "kernel_size": 25,     # Dimensione della finestra per la media mobile (trend)
+}
+
 
 EPOCHS = 50  # Numero di epoche per il training
 LEARNING_RATE = 0.001
+
+# --- BENCHMARK VALUES ---
+# Valori MAE del modello Naive calcolati sui 3 fold di validazione.
+# Servono per calcolare la metrica MASE durante il training.
+NAIVE_MAE_PER_FOLD = [0.061884590465089546, 0.07340711300544765, 0.06745997751536577]
 
 # --- PERCORSI FILE ---
 

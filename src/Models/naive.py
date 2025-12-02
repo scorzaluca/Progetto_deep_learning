@@ -2,14 +2,14 @@ import torch
 import torch.nn as nn
 
 class NaivePersistence(nn.Module):
-    def __init__(self, model_config: dict):
+    def __init__(self):
         super(NaivePersistence, self).__init__()
-        self.horizon = model_config.get("horizon", 24)
+        self.horizon = 24
         
         # IMPORTANTE: Il modello deve sapere quale feature nell'input è la potenza PV.
         # L'LSTM impara da solo quali feature pesare, ma il Naive deve copiare quella giusta.
         # Di default proviamo con 0, ma va configurato correttamente in config.py.
-        self.target_idx = model_config.get("target_feature_index", 0)
+        self.target_idx = 12
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

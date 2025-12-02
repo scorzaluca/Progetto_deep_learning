@@ -2,6 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from src import config
 
 
 def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
@@ -32,6 +33,9 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
     """
     model.eval()  # Disabilita dropout
     running_loss = 0.0
+    running_mae = 0.0  # MAE per il MASE
+
+    mae_fn = nn.L1Loss() # Funzione per calcolare il MAE
 
     with torch.no_grad():  # Disabilita il calcolo dei gradienti (risparmia memoria)
         for batch_x, batch_y in dataloader:
@@ -39,14 +43,22 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
             batch_y = batch_y.to(device)
 
             predictions = model(batch_x)
-            loss = loss_fn(predictions, batch_y)
 
+            # 1. Calcolo Loss (MSE) per Early Stopping
+            loss = loss_fn(predictions, batch_y)
             running_loss += loss.item()
 
-    return running_loss / len(dataloader)
+            # 2. Calcolo MAE per metrica MASE
+            mae = mae_fn(predictions, batch_y)
+            running_mae += mae.item()
+
+    avg_loss = running_loss / len(dataloader)
+    avg_mae = running_mae / len(dataloader)
+
+    return avg_loss, avg_mae
 
 
-def fit_model(model, train_loader, val_loader, epochs, lr, device, patience=10):
+def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, patience=10):
     """
     Ciclo principale di addestramento con Early Stopping.
     """
@@ -54,7 +66,9 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, patience=10):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
 
-    history = {"train_loss": [], "val_loss": []}
+    baseline_mae = config.NAIVE_MAE_PER_FOLD[fold_idx]
+
+    history = {"train_loss": [], "val_loss": [], "val_mase": []}
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
@@ -67,19 +81,25 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, patience=10):
         train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
 
         # --- VALIDATION ---
-        val_loss = validate_one_epoch(model, val_loader, loss_fn, device)
+        val_loss, val_mae = validate_one_epoch(model, val_loader, loss_fn, device)
+
+        current_mase = val_mae / baseline_mae
 
         # Salviamo la storia
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
+        history["val_mase"].append(current_mase)
 
         # Stampa pulita
         if (epoch + 1) % 5 == 0 or epoch == 0:
             print(
-                f"Epoch {epoch + 1}/{epochs} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}"
+                f"Epoch {epoch + 1}/{epochs} | "
+                f"Train MSE: {train_loss:.6f} | "
+                f"Val MSE: {val_loss:.6f} | "
+                f"Val MASE: {current_mase:.4f}"
             )
 
-        # --- EARLY STOPPING CHECK ---
+        # --- EARLY STOPPING CHECK (su MSE più stabile) ---
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             epochs_no_improve = 0

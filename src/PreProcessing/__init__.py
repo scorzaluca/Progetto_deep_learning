@@ -1,8 +1,8 @@
-from .preprocessing import preprocesser
-from .uploading import uploader
+from .preprocessing import Preprocesser
+from .uploading import Uploader
 
 # Definisco esplicitamente cosa viene esportato all'esterno
 __all__ = [
-    "preprocesser",
-    "uploader"
+    "Preprocesser",
+    "Uploader"
 ]
