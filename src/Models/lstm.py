@@ -3,9 +3,14 @@ import torch.nn as nn
 
 
 class LSTM(nn.Module):
-    def __init__(self, model_config: dict):
+    def __init__(self, model_config: dict, train_loader):
         super(LSTM, self).__init__()
-        self.input_size = model_config.get("input_size", 10)
+        
+        # --- MODIFICA: Lettura dinamica delle features dal loader ---
+        # Accede al dataset dentro il loader e legge la shape del tensore dati
+        self.input_size = train_loader.dataset.data_tensor.shape[1]
+        
+        # Il resto delle configurazioni rimane uguale
         self.hidden_size = model_config.get("hidden_size", 64)
         self.output_size = model_config.get("output_size", 24)
         self.num_layers = model_config.get("num_layers", 1)
