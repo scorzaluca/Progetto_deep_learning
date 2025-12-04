@@ -39,9 +39,8 @@ SAMPLING_CONFIG = {
 # --- LSTM PARAMETERS ---
 
 LSTM_CONFIG = {
-    "input_size": 10,
     "hidden_size": 64,
-    "output_size": 24,
+    "output_size": HORIZON,
     "num_layers": 1,
     "dropout": 0.0,
     "bidirectional": False,
@@ -55,6 +54,17 @@ DLINEAR_CONFIG = {
     "horizon": HORIZON,    # 24 ore di previsione
     "input_size": 10,      # Numero di feature in input
     "kernel_size": 25,     # Dimensione della finestra per la media mobile (trend)
+}
+
+
+PATCHTST_CONFIG = {
+    "patch_length": 16,      
+    "stride": 8,             
+    "d_model": 128,          
+    "n_heads": 4,           
+    "n_layers": 3,           
+    "dropout": 0.2,          
+    "use_cls_token": False   
 }
 
 
