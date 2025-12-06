@@ -14,15 +14,18 @@ class DLinear(nn.Module):
     Le predizioni finali sono la somma delle due componenti.
     """
     
-    def __init__(self, model_config: dict):
+    def __init__(self, model_config: dict, train_loader):
         super(DLinear, self).__init__()
         
         # Parametri da configurazione
         self.lookback = model_config.get("lookback", 48)
         self.horizon = model_config.get("horizon", 24)
-        self.input_size = model_config.get("input_size", 10)
         self.kernel_size = model_config.get("kernel_size", 25)
         
+        # --- MODIFICA: Lettura dinamica delle features dal loader ---
+        # Accede al dataset dentro il loader e legge la shape del tensore dati
+        self.input_size = train_loader.dataset.data_tensor.shape[1]
+            
         # DECOMPOSIZIONE: Moving Average per estrarre il trend
         # Il kernel_size determina quanto è "liscia" la media mobile
         # Deve essere un numero dispari per avere simmetria

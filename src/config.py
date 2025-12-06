@@ -2,6 +2,7 @@
 # DATASET PARAMETERS
 DATA_PATH = "data/raw/wx_dataset.xlsx"
 LABEL_PATH = "data/raw/pv_dataset.xlsx"
+
 TARGET_COL = "pv_power"
 DATE_COL = "dt_iso"
 COLUMNS_TO_REMOVE = ["lat", "lon", DATE_COL]
@@ -16,6 +17,7 @@ PREPROCESS_CONFIG = {
     "fill_na_column": FILLNA_COLUMN,
 }
 
+ADJUSTED_DF="data/processed/adjusted_ds.csv"
 
 # -----------------------------SAMPLING----------------------------------
 # --- SAMPLING Parameters (I più importanti) ---
@@ -52,9 +54,10 @@ LSTM_CONFIG = {
 DLINEAR_CONFIG = {
     "lookback": LOOKBACK,  # 48 ore di storia
     "horizon": HORIZON,    # 24 ore di previsione
-    "input_size": 10,      # Numero di feature in input
+    # input_size viene rilevato dinamicamente dal train_loader
     "kernel_size": 25,     # Dimensione della finestra per la media mobile (trend)
 }
+
 
 
 PATCHTST_CONFIG = {

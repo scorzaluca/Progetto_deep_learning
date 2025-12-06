@@ -5,11 +5,11 @@ import config
 
 
 class PatchTST(nn.Module):
-    # Cambiamo il nome del parametro in 'train_loader' così è chiaro cosa vuole
     def __init__(self, model_config: dict, train_loader):
         """
         Args:
-            train_loader: Il DataLoader che hai creato nel data_loader.py
+            model_config: Dizionario con i parametri del modello.
+            train_loader: Il DataLoader che hai creato nel data_loader.py.
         """
         super().__init__()
 
@@ -22,7 +22,7 @@ class PatchTST(nn.Module):
         dataset = train_loader.dataset
 
         # 2. ACCESSO AL TENSORE DATI
-        # PVForecastDataset ha l'attributo self.data_tensor (riga 20 di sampler.py)
+        # PVForecastDataset ha l'attributo self.data_tensor
         # Shape: [Righe, Features] -> Prendiamo l'indice 1 (Features)
         self.num_channels = dataset.data_tensor.shape[1]
 
