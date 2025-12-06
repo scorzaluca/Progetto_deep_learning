@@ -26,6 +26,7 @@ class PatchTST(nn.Module):
         dataset = train_loader.dataset
 
         # 2. ACCESSO AL TENSORE DATI
+        # Shape: [Righe, Features] -> Prendiamo l'indice 1 (Features)
         self.num_channels = dataset.data_tensor.shape[1]
 
         # 3. SALVIAMO L'INDICE DEL TARGET (pv_power)
@@ -58,9 +59,14 @@ class PatchTST(nn.Module):
         """
         Forward pass del PatchTST.
 
+        Il modello HuggingFace restituisce predizioni per TUTTE le feature.
+        Noi estraiamo solo la predizione per pv_power (target_idx).
+
         Input x: (Batch, Lookback, Num_Channels)
         Output:  (Batch, Horizon, 1) -> Solo la predizione per pv_power
         """
         full_output = self.model(past_values=x).prediction_outputs
+
+        # Estraiamo solo il canale target (pv_power)
         target_output = full_output[:, :, self.target_idx : self.target_idx + 1]
         return target_output
