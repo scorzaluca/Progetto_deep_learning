@@ -13,9 +13,7 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
     model.train()  # Abilita dropout/batchnorm
     running_loss = 0.0
 
-    num_batches = len(dataloader)
-
-    for i, (batch_x, batch_y) in enumerate(dataloader):
+    for batch_x, batch_y in dataloader:
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
         optimizer.zero_grad()

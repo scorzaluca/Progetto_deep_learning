@@ -4,8 +4,6 @@ Gestisce la creazione di studi, obiettivi e pruning.
 """
 
 import os
-import json
-import copy
 import optuna
 from optuna.trial import Trial
 from optuna.pruners import MedianPruner
@@ -136,7 +134,6 @@ class OptunaOptimizer:
         patience = self.config["patience"]
 
         best_mase = float("inf")
-        best_model_state = None
         epochs_no_improve = 0
 
         for epoch in range(epochs):
@@ -168,7 +165,6 @@ class OptunaOptimizer:
             # Update best
             if current_mase < best_mase:
                 best_mase = current_mase
-                best_model_state = copy.deepcopy(model.state_dict())
                 epochs_no_improve = 0
             else:
                 epochs_no_improve += 1
@@ -212,7 +208,7 @@ class OptunaOptimizer:
         # 3. Addestra su ogni fold
         mase_scores = []
         for fold_idx in fold_indices:
-            train_loader, val_loader, scaler = self.folds[fold_idx]
+            train_loader, val_loader, _ = self.folds[fold_idx]
 
             # Crea modello
             model = self._create_model(params, train_loader)
