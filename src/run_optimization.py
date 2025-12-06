@@ -16,9 +16,6 @@ MODE = "screening"
 # Modello per intensive (usato solo se MODE = "intensive")
 MODEL_INTENSIVE = "lstm"
 
-# Dry run per test veloce (solo 2 trial)
-DRY_RUN = True
-
 SEED = 42
 DATA_PATH = "../data/processed/adjusted_ds.csv"
 RESULTS_DIR = "../results/"
@@ -55,7 +52,7 @@ def load_data_and_folds():
     print(f"Shape: {df.shape}")
 
     validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
-    folds = validator.get_folds()
+    folds = list(validator.get_folds())  # Converti generatore in lista
     print(f"Fold creati: {len(folds)}")
 
     return folds
@@ -69,7 +66,6 @@ def main():
     print(f"Modalita: {MODE.upper()}")
     if MODE == "intensive":
         print(f"Modello: {MODEL_INTENSIVE.upper()}")
-    print(f"Dry run: {DRY_RUN}")
     print("=" * 60 + "\n")
 
     set_seed(SEED)
@@ -82,7 +78,6 @@ def main():
             device=device,
             config=SCREENING_CONFIG,
             results_dir=RESULTS_DIR,
-            dry_run=DRY_RUN,
         )
 
         print("\n" + "=" * 60)
@@ -113,7 +108,6 @@ def main():
             device=device,
             config=INTENSIVE_CONFIG,
             results_dir=RESULTS_DIR,
-            dry_run=DRY_RUN,
         )
 
         print("\n" + "=" * 60)

@@ -223,7 +223,7 @@ def _train_final_model(
     best_mase_overall = float("inf")
     best_model_state = None
 
-    for fold_idx, (train_loader, val_loader, scaler) in enumerate(folds):
+    for fold_idx, (train_loader, val_loader, _) in enumerate(folds):
         print(f"  Training fold {fold_idx + 1}/{len(folds)}...")
 
         # Crea modello
