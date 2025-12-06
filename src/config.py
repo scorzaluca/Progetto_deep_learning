@@ -52,9 +52,10 @@ LSTM_CONFIG = {
 DLINEAR_CONFIG = {
     "lookback": LOOKBACK,  # 48 ore di storia
     "horizon": HORIZON,    # 24 ore di previsione
-    "input_size": 10,      # Numero di feature in input
+    # input_size viene rilevato dinamicamente dal train_loader
     "kernel_size": 25,     # Dimensione della finestra per la media mobile (trend)
 }
+
 
 
 PATCHTST_CONFIG = {

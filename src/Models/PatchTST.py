@@ -3,12 +3,15 @@ import torch.nn as nn
 from transformers import PatchTSTConfig, PatchTSTForPrediction
 import config 
 
+
 class PatchTST(nn.Module):
-    # Cambiamo il nome del parametro in 'train_loader' così è chiaro cosa vuole
     def __init__(self, model_config: dict, train_loader):
         """
+        Wrapper per il modello PatchTST di HuggingFace.
+        
         Args:
-            train_loader: Il DataLoader che hai creato nel data_loader.py
+            model_config: Dizionario con i parametri del modello.
+            train_loader: Il DataLoader che hai creato nel data_loader.py.
         """
         super().__init__()
         
@@ -21,11 +24,15 @@ class PatchTST(nn.Module):
         dataset = train_loader.dataset
         
         # 2. ACCESSO AL TENSORE DATI
-        # PVForecastDataset ha l'attributo self.data_tensor (riga 20 di sampler.py)
+        # PVForecastDataset ha l'attributo self.data_tensor
         # Shape: [Righe, Features] -> Prendiamo l'indice 1 (Features)
         self.num_channels = dataset.data_tensor.shape[1]
         
-        print(f"Features rilevate dal train_loader: {self.num_channels}")
+        # 3. SALVIAMO L'INDICE DEL TARGET (pv_power)
+        # Serve per estrarre solo la predizione del PV dal forward
+        self.target_idx = dataset.target_col_idx
+        
+        print(f"PatchTST - Features rilevate: {self.num_channels}, target_idx: {self.target_idx}")
 
         # --- Il resto rimane uguale ---
         self.lookback = config.LOOKBACK
@@ -49,4 +56,20 @@ class PatchTST(nn.Module):
         self.model = PatchTSTForPrediction(hf_config)
         
     def forward(self, x):
-        return self.model(past_values=x).logits
+        """
+        Forward pass del PatchTST.
+        
+        Il modello HuggingFace restituisce predizioni per TUTTE le feature.
+        Noi estraiamo solo la predizione per pv_power (target_idx).
+        
+        Input x: (Batch, Lookback, Num_Channels)
+        Output:  (Batch, Horizon, 1) -> Solo la predizione per pv_power
+        """
+        # Output shape: (Batch, Horizon, Num_Channels)
+        full_output = self.model(past_values=x).prediction_outputs
+        
+        # Estraiamo solo il canale target (pv_power)
+        # Output shape: (Batch, Horizon, 1)
+        target_output = full_output[:, :, self.target_idx:self.target_idx+1]
+        
+        return target_output

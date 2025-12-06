@@ -1,15 +1,36 @@
 import torch
 import torch.nn as nn
 
+
 class NaivePersistence(nn.Module):
-    def __init__(self):
+    """
+    Modello Naive Persistence (Daily Persistence).
+    
+    Predice che domani sarà uguale a oggi.
+    Usato come baseline per calcolare il MASE.
+    """
+    
+    def __init__(self, train_loader=None, target_idx: int = None):
+        """
+        Args:
+            train_loader: DataLoader per rilevare dinamicamente target_idx se non specificato.
+            target_idx: Indice della colonna target (pv_power). Se None, viene rilevato dal loader.
+        """
         super(NaivePersistence, self).__init__()
         self.horizon = 24
         
-        # IMPORTANTE: Il modello deve sapere quale feature nell'input è la potenza PV.
-        # L'LSTM impara da solo quali feature pesare, ma il Naive deve copiare quella giusta.
-        # Di default proviamo con 0, ma va configurato correttamente in config.py.
-        self.target_idx = 12
+        # --- TARGET INDEX DINAMICO ---
+        if target_idx is not None:
+            self.target_idx = target_idx
+            print(f"NaivePersistence - Usando target_idx fornito: {self.target_idx}")
+        elif train_loader is not None:
+            # Leggiamo l'indice target dal dataset (attributo target_col_idx)
+            self.target_idx = train_loader.dataset.target_col_idx
+            print(f"NaivePersistence - target_idx rilevato dal loader: {self.target_idx}")
+        else:
+            # Fallback al valore di default per retrocompatibilità
+            self.target_idx = 0
+            print(f"⚠️ NaivePersistence - target_idx non specificato, usando default: {self.target_idx}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
