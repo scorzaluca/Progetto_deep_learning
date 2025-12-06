@@ -16,6 +16,7 @@ from .training_config import (
     EPOCHS,
     LEARNING_RATE,
     NAIVE_MAE_PER_FOLD,
+    RESULTS_DIR,
     SCREENING_CONFIG,
     INTENSIVE_CONFIG,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "EPOCHS",
     "LEARNING_RATE",
     "NAIVE_MAE_PER_FOLD",
+    "RESULTS_DIR",
     "SCREENING_CONFIG",
     "INTENSIVE_CONFIG",
 ]

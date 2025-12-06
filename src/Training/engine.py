@@ -15,7 +15,7 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
 
     num_batches = len(dataloader)
 
-    for i, batch_x, batch_y in enumerate(dataloader):
+    for i, (batch_x, batch_y) in enumerate(dataloader):
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
         optimizer.zero_grad()
