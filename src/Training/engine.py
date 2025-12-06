@@ -1,4 +1,5 @@
 import copy
+import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -47,12 +48,13 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
 def validate_one_epoch(model, dataloader, loss_fn, device):
     """
     Esegue un'epoca di validazione (Solo Forward).
+    Calcola MSE, MAE e RMSE.
     """
     model.eval()  # Disabilita dropout
     running_loss = 0.0
     running_mae = 0.0  # MAE per il MASE
 
-    mae_fn = nn.L1Loss() # Funzione per calcolare il MAE
+    mae_fn = nn.L1Loss()  # Funzione per calcolare il MAE
 
     with torch.no_grad():  # Disabilita il calcolo dei gradienti (risparmia memoria)
         for batch_x, batch_y in dataloader:
@@ -71,13 +73,30 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
 
     avg_loss = running_loss / len(dataloader)
     avg_mae = running_mae / len(dataloader)
+    
+    # 3. Calcolo RMSE = sqrt(MSE)
+    avg_rmse = math.sqrt(avg_loss)
 
-    return avg_loss, avg_mae
+    return avg_loss, avg_mae, avg_rmse
 
 
 def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, patience=10):
     """
     Ciclo principale di addestramento con Early Stopping.
+    
+    Args:
+        model: Modello PyTorch da addestrare.
+        train_loader: DataLoader per il training.
+        val_loader: DataLoader per la validazione.
+        epochs: Numero massimo di epoche.
+        lr: Learning rate.
+        device: Device (cuda o cpu).
+        fold_idx: Indice del fold corrente (per calcolare MASE).
+        patience: Numero di epoche senza miglioramento prima dell'early stopping.
+        
+    Returns:
+        model: Modello addestrato con i pesi migliori.
+        history: Dizionario con le metriche per ogni epoca.
     """
     # Definisci Optimizer e Loss qui (o passali come argomenti se vuoi più controllo)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -85,7 +104,12 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
 
     baseline_mae = config.NAIVE_MAE_PER_FOLD[fold_idx]
 
-    history = {"train_loss": [], "val_loss": [], "val_mase": []}
+    history = {
+        "train_loss": [], 
+        "val_loss": [], 
+        "val_mase": [],
+        "val_rmse": []  # Aggiunta metrica RMSE
+    }
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
@@ -98,7 +122,7 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
         train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
 
         # --- VALIDATION ---
-        val_loss, val_mae = validate_one_epoch(model, val_loader, loss_fn, device)
+        val_loss, val_mae, val_rmse = validate_one_epoch(model, val_loader, loss_fn, device)
 
         current_mase = val_mae / baseline_mae
 
@@ -106,6 +130,7 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
         history["train_loss"].append(train_loss)
         history["val_loss"].append(val_loss)
         history["val_mase"].append(current_mase)
+        history["val_rmse"].append(val_rmse)
 
         # Stampa pulita
         if (epoch + 1) % 5 == 0 or epoch == 0:
@@ -113,7 +138,8 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
                 f"Epoch {epoch + 1}/{epochs} | "
                 f"Train MSE: {train_loss:.6f} | "
                 f"Val MSE: {val_loss:.6f} | "
-                f"Val MASE: {current_mase:.4f}"
+                f"Val MASE: {current_mase:.4f} | "
+                f"Val RMSE: {val_rmse:.6f}"
             )
 
         # --- EARLY STOPPING CHECK (su MSE più stabile) ---
