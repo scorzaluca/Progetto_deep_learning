@@ -24,3 +24,6 @@ Thumbs.db
 
 # --- Segreti (se usi env vars)
 .env
+
+# --- Risultati
+results/

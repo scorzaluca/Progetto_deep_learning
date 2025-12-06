@@ -1,11 +1,6 @@
 import torch.nn as nn
 from transformers import PatchTSTConfig, PatchTSTForPrediction
-
-# Import flessibile per supportare diverse modalità di esecuzione
-try:
-    from config import LOOKBACK, HORIZON
-except ImportError:
-    from src.config import LOOKBACK, HORIZON
+from config import LOOKBACK, HORIZON
 
 
 class PatchTST(nn.Module):
