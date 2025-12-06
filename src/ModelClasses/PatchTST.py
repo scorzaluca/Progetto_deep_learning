@@ -1,7 +1,11 @@
-import torch
 import torch.nn as nn
 from transformers import PatchTSTConfig, PatchTSTForPrediction
-import config
+
+# Import flessibile per supportare diverse modalità di esecuzione
+try:
+    from config import LOOKBACK, HORIZON
+except ImportError:
+    from src.config import LOOKBACK, HORIZON
 
 
 class PatchTST(nn.Module):
@@ -19,33 +23,27 @@ class PatchTST(nn.Module):
             raise ValueError("Devi passare il train_loader!")
 
         # 1. ACCESSO AL DATASET
-        # train_loader (parametro) -> .dataset (attributo PyTorch standard)
-        # Questo ci dà l'oggetto PVForecastDataset che hai definito in sampler.py
         dataset = train_loader.dataset
 
         # 2. ACCESSO AL TENSORE DATI
-        # PVForecastDataset ha l'attributo self.data_tensor
         # Shape: [Righe, Features] -> Prendiamo l'indice 1 (Features)
         self.num_channels = dataset.data_tensor.shape[1]
 
         # 3. SALVIAMO L'INDICE DEL TARGET (pv_power)
-        # Serve per estrarre solo la predizione del PV dal forward
         self.target_idx = dataset.target_col_idx
 
         print(
             f"PatchTST - Features rilevate: {self.num_channels}, target_idx: {self.target_idx}"
         )
 
-        # --- Il resto rimane uguale ---
-        self.lookback = config.LOOKBACK
-        self.horizon = config.HORIZON
+        self.lookback = LOOKBACK
+        self.horizon = HORIZON
 
         hf_config = PatchTSTConfig(
             context_length=self.lookback,
             prediction_length=self.horizon,
             num_input_channels=self.num_channels,
             num_targets=self.num_channels,
-            # ... parametri dal dizionario ...
             patch_length=model_config.get("patch_length", 16),
             stride=model_config.get("stride", 8),
             d_model=model_config.get("d_model", 128),
@@ -67,11 +65,8 @@ class PatchTST(nn.Module):
         Input x: (Batch, Lookback, Num_Channels)
         Output:  (Batch, Horizon, 1) -> Solo la predizione per pv_power
         """
-        # Output shape: (Batch, Horizon, Num_Channels)
         full_output = self.model(past_values=x).prediction_outputs
 
         # Estraiamo solo il canale target (pv_power)
-        # Output shape: (Batch, Horizon, 1)
         target_output = full_output[:, :, self.target_idx : self.target_idx + 1]
-
         return target_output

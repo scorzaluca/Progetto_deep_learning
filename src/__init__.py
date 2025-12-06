@@ -1,18 +1,17 @@
-# 1. Importo dal pacchetto 'data_loading' (la cartella)
-# Nota: Qui Python va a leggere src/data_loading/__init__.py
-from .Data_loading import PVForecastDataset, TS_Cross_Validator
+# 1. Importo dal pacchetto DataLoading
+from .DataLoading import PVForecastDataset, TS_Cross_Validator
 
-# 2. Importo dal pacchetto 'preprocessing' (la cartella)
-# Nota: Qui Python va a leggere src/preprocessing/__init__.py
+# 2. Importo dal pacchetto PreProcessing
 from .PreProcessing import Preprocesser, Uploader
-from .Models import NaivePersistence
+
+# 3. Importo dai modelli
+from .ModelClasses import NaivePersistence
 
 
-# (Opzionale) Se vuoi esporre anche qui tutto all'esterno
 __all__ = [
     "PVForecastDataset",
     "TS_Cross_Validator",
     "Preprocesser",
     "Uploader",
-    "NaivePersistence"
+    "NaivePersistence",
 ]

@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import config
+from config import NAIVE_MAE_PER_FOLD
 
 
 def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
@@ -15,7 +15,7 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
 
     num_batches = len(dataloader)
 
-    for i, batch_x, batch_y in enumerate(dataloader):
+    for i, (batch_x, batch_y) in enumerate(dataloader):
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
         optimizer.zero_grad()
@@ -27,22 +27,7 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
 
         running_loss += loss.item()
 
-        # .size(0) ci dà il numero di campioni nel batch (es. 64 o l'ultimo che può essere minore)
-        current_batch_size = batch_x.size(0)
-        
-        # .shape ci dà le dimensioni complete: [Batch, Time, Features]
-        # Trasformiamo in list per una stampa più pulita (es. [64, 48, 12])
-        input_shape = list(batch_x.shape)   
-        target_shape = list(batch_y.shape)  
-
-        # --- STAMPA DETTAGLIATA ---
-        print(f"   Batch {i+1}/{num_batches} | "
-              f"Loss: {running_loss:.6f} | "
-              f"Samples: {current_batch_size} | "
-              f"In Shape: {input_shape} | "
-              f"Out Shape: {target_shape}")
-
-    return running_loss / num_batches
+    return running_loss / len(dataloader)
 
 
 def validate_one_epoch(model, dataloader, loss_fn, device):
@@ -73,17 +58,19 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
 
     avg_loss = running_loss / len(dataloader)
     avg_mae = running_mae / len(dataloader)
-    
+
     # 3. Calcolo RMSE = sqrt(MSE)
     avg_rmse = math.sqrt(avg_loss)
 
     return avg_loss, avg_mae, avg_rmse
 
 
-def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, patience=10):
+def fit_model(
+    model, train_loader, val_loader, epochs, lr, device, fold_idx, patience=10
+):
     """
     Ciclo principale di addestramento con Early Stopping.
-    
+
     Args:
         model: Modello PyTorch da addestrare.
         train_loader: DataLoader per il training.
@@ -93,7 +80,7 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
         device: Device (cuda o cpu).
         fold_idx: Indice del fold corrente (per calcolare MASE).
         patience: Numero di epoche senza miglioramento prima dell'early stopping.
-        
+
     Returns:
         model: Modello addestrato con i pesi migliori.
         history: Dizionario con le metriche per ogni epoca.
@@ -102,13 +89,13 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
 
-    baseline_mae = config.NAIVE_MAE_PER_FOLD[fold_idx]
+    baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
 
     history = {
-        "train_loss": [], 
-        "val_loss": [], 
+        "train_loss": [],
+        "val_loss": [],
         "val_mase": [],
-        "val_rmse": []  # Aggiunta metrica RMSE
+        "val_rmse": [],  # Aggiunta metrica RMSE
     }
 
     best_val_loss = float("inf")
@@ -122,7 +109,9 @@ def fit_model(model, train_loader, val_loader, epochs, lr, device, fold_idx, pat
         train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
 
         # --- VALIDATION ---
-        val_loss, val_mae, val_rmse = validate_one_epoch(model, val_loader, loss_fn, device)
+        val_loss, val_mae, val_rmse = validate_one_epoch(
+            model, val_loader, loss_fn, device
+        )
 
         current_mase = val_mae / baseline_mae
 

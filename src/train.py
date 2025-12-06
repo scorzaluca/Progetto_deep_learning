@@ -1,22 +1,33 @@
+"""
+Script principale per il training dei modelli con cross-validation.
+"""
+
 import pandas as pd
 import torch
 import numpy as np
 import random
 import os
-import config
-from data_loader import TS_Cross_Validator
-from engine import fit_model
-from PatchTST import PatchTST
-from lstm import LSTM
-from dlinear import DLinear
+from config import (
+    TARGET_COL,
+    SAMPLING_CONFIG,
+    EPOCHS,
+    LEARNING_RATE,
+    PATCHTST_CONFIG,
+    LSTM_CONFIG,
+    DLINEAR_CONFIG,
+    RESULTS_DIR,
+)
+from DataLoading import TS_Cross_Validator
+from Training.engine import fit_model
+from Training.evaluation import evaluate_model
+from ModelClasses import PatchTST, LSTM, DLinear
 
-# --- SEED PER RIPRODUCIBILITÀ ---
 SEED = 42
 DATA_PATH = "data/processed/adjusted_ds.csv"
 
 
 def set_seed(seed: int):
-    """Imposta il seed per garantire riproducibilità."""
+    """Imposta il seed per riproducibilita."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -26,107 +37,69 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-set_seed(SEED)
+def main():
+    set_seed(SEED)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
-# --- SETUP ---
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    df = pd.read_csv(DATA_PATH)
+    print(f"Dataset shape: {df.shape}")
 
-# --- 1. CARICAMENTO DATASET PULITO ---
-df = pd.read_csv(DATA_PATH)
+    validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
+    folds = validator.get_folds()
 
-# --- 2. GENERAZIONE FOLD (Usando il tuo Data Loader) ---
-validator = TS_Cross_Validator(df, target_col=config.TARGET_COL, cfg_dict=config.SAMPLING_CONFIG)
-validator.visualize_splits()
-for fold_idx, (train_loader, val_loader, scaler) in enumerate(validator.get_folds()):
-    
-    print(f"\n{'='*40}")
-    print(f"🚀 TRAINING FOLD {fold_idx + 1}/{config.N_SPLITS}")
-    print(f"{'='*40}")
+    models_to_train = ["LSTM", "DLinear", "PatchTST"]
 
-    # --- A. INIZIALIZZA IL MODELLO ---
-    # Usiamo config.LSTM_CONFIG.
-    # Passiamo train_loader perché la tua classe LSTM calcola self.input_size dinamicamente da lì.
-    model = LSTM(config.LSTM_CONFIG, train_loader).to(device)
-    
-    # --- B. AVVIA IL TRAINING (fit_model) ---
-    # fit_model gestisce training loop, validation loop, early stopping e MASE.
-    # Passiamo fold_idx così pesca il NAIVE_MAE corretto dal config.
-    trained_model, history = fit_model(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        epochs=config.EPOCHS,
-        lr=config.LEARNING_RATE,
-        device=device,
-        fold_idx=fold_idx, 
-        patience=10  # Puoi parametrizzarlo nel config se vuoi
-    )
+    for fold_idx, (train_loader, val_loader, scaler) in enumerate(folds):
+        print(f"\n{'=' * 60}")
+        print(f"FOLD {fold_idx + 1}/{len(folds)}")
+        print(f"{'=' * 60}")
 
-    # --- C. VALUTAZIONE FINALE (evaluate_model) ---
-    print(f"\nValutazione finale Fold {fold_idx + 1}...")
-    
-    # Questa funzione fa predizioni, denormalizza (grazie a scaler e target_idx)
-    # e restituisce i valori in Watt reali.
-    preds, targets = evaluate_model(
-        model=trained_model,
-        val_loader=val_loader,
-        device=device,
-        scaler=scaler,
-        target_idx=target_idx
-    )
-    
-    # --- D. SALVATAGGIO DEL MODELLO ---
-    # Salviamo i pesi del modello migliore di questo fold
-    save_path = os.path.join(config.RESULTS_DIR, f"lstm_fold_{fold_idx}.pth")
-    torch.save(trained_model.state_dict(), save_path)
-    print(f"Modello salvato in: {save_path}")
+        target_idx = train_loader.dataset.target_col_idx
 
-print("\n--- TUTTI I FOLD COMPLETATI ---")
+        for model_name in models_to_train:
+            print(f"\nTraining {model_name}...")
 
-'''models_to_train = ["PatchTST", "LSTM"]
+            if model_name == "PatchTST":
+                model = PatchTST(
+                    model_config=PATCHTST_CONFIG, train_loader=train_loader
+                )
+            elif model_name == "LSTM":
+                model = LSTM(model_config=LSTM_CONFIG, train_loader=train_loader)
+            elif model_name == "DLinear":
+                model = DLinear(model_config=DLINEAR_CONFIG, train_loader=train_loader)
 
-# --- 3. TRAINING LOOP ---
-for fold_idx, (train_loader, val_loader, scaler) in enumerate(folds):
-    print(f"\n=== FOLD {fold_idx + 1} ===")
+            model.to(device)
 
-    for model_name in models_to_train:
-        print(f"Training {model_name}...")
-
-        # --- ISTANZIAZIONE CORRETTA ---
-        if model_name == "PatchTST":
-            # Passiamo il loader così legge le feature da solo
-            model = PatchTST(
-                model_config=config.PATCHTST_CONFIG, train_loader=train_loader
+            trained_model, history = fit_model(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                epochs=EPOCHS,
+                lr=LEARNING_RATE,
+                device=device,
+                fold_idx=fold_idx,
             )
 
-        elif model_name == "LSTM":
-            # Passiamo il config statico
-            model = LSTM(model_config=config.LSTM_CONFIG, train_loader=train_loader)
-
-        elif model_name == "DLinear":
-            # Passiamo il config e il loader per input_size dinamico
-            model = DLinear(
-                model_config=config.DLINEAR_CONFIG, train_loader=train_loader
+            # Valutazione finale
+            preds, targets = evaluate_model(
+                model=trained_model,
+                val_loader=val_loader,
+                device=device,
+                scaler=scaler,
+                target_idx=target_idx,
             )
 
-        model.to(device)
+            # Salvataggio
+            os.makedirs(RESULTS_DIR, exist_ok=True)
+            save_path = os.path.join(
+                RESULTS_DIR, f"{model_name}_fold_{fold_idx + 1}.pth"
+            )
+            torch.save(trained_model.state_dict(), save_path)
+            print(f"Salvato: {save_path}")
 
-        # --- TRAINING (Usando il tuo Engine) ---
-        trained_model, history = fit_model(
-            model=model,
-            train_loader=train_loader,
-            val_loader=val_loader,
-            epochs=config.EPOCHS,
-            lr=config.LEARNING_RATE,
-            device=device,
-            fold_idx=fold_idx,  # Aggiunto per calcolare MASE correttamente
-        )
+    print("\nTraining completato.")
 
-        # --- SALVATAGGIO ---
-        save_path = os.path.join(
-            config.RESULTS_DIR, f"{model_name}_fold_{fold_idx + 1}.pth"
-        )
-        torch.save(trained_model.state_dict(), save_path)
-        print(f"Salvato: {save_path}")
 
-print("Training completato.")'''
+if __name__ == "__main__":
+    main()

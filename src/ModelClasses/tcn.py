@@ -49,13 +49,13 @@ class TemporalBlock(nn.Module):
     def forward(self, x):
         # Ramo principale
         out = self.conv1(x)
-        out = out[:, :, : -self.padding]  # Rimuoviamo il padding futuro (causalità)
+        out = out[:, :, : -self.padding] if self.padding > 0 else out
         out = self.bn1(out)
         out = self.relu1(out)
         out = self.dropout1(out)
 
         out = self.conv2(out)
-        out = out[:, :, : -self.padding]  # Rimuoviamo il padding futuro (causalità)
+        out = out[:, :, : -self.padding] if self.padding > 0 else out
         out = self.bn2(out)
         out = self.relu2(out)
         out = self.dropout2(out)
