@@ -17,7 +17,7 @@ PREPROCESS_CONFIG = {
     "fill_na_column": FILLNA_COLUMN,
 }
 
-ADJUSTED_DF="data/processed/adjusted_ds.csv"
+ADJUSTED_DF = "data/processed/adjusted_ds.csv"
 
 # -----------------------------SAMPLING----------------------------------
 # --- SAMPLING Parameters (I più importanti) ---
@@ -53,21 +53,29 @@ LSTM_CONFIG = {
 
 DLINEAR_CONFIG = {
     "lookback": LOOKBACK,  # 48 ore di storia
-    "horizon": HORIZON,    # 24 ore di previsione
+    "horizon": HORIZON,  # 24 ore di previsione
     # input_size viene rilevato dinamicamente dal train_loader
-    "kernel_size": 25,     # Dimensione della finestra per la media mobile (trend)
+    "kernel_size": 25,  # Dimensione della finestra per la media mobile (trend)
 }
 
 
-
 PATCHTST_CONFIG = {
-    "patch_length": 16,      
-    "stride": 8,             
-    "d_model": 128,          
-    "n_heads": 4,           
-    "n_layers": 3,           
-    "dropout": 0.2,          
-    "use_cls_token": False   
+    "patch_length": 16,
+    "stride": 8,
+    "d_model": 128,
+    "n_heads": 4,
+    "n_layers": 3,
+    "dropout": 0.2,
+    "use_cls_token": False,
+}
+
+# --- TCN PARAMETERS ---
+TCN_CONFIG = {
+    "hidden_size": 64,  # Dimensione dei layer nascosti (come LSTM)
+    "output_size": HORIZON,  # 24 ore di previsione
+    "num_layers": 4,  # Numero di blocchi TCN (dilatazione: 1, 2, 4, 8)
+    "kernel_size": 3,  # Dimensione del kernel convoluzionale
+    "dropout": 0.2,  # Dropout per regolarizzazione
 }
 
 
