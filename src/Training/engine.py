@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from src import config
+import config
 
 
 def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
@@ -12,7 +12,9 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
     model.train()  # Abilita dropout/batchnorm
     running_loss = 0.0
 
-    for batch_x, batch_y in dataloader:
+    num_batches = len(dataloader)
+
+    for i, batch_x, batch_y in enumerate(dataloader):
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
         optimizer.zero_grad()
@@ -24,7 +26,22 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
 
         running_loss += loss.item()
 
-    return running_loss / len(dataloader)
+        # .size(0) ci dà il numero di campioni nel batch (es. 64 o l'ultimo che può essere minore)
+        current_batch_size = batch_x.size(0)
+        
+        # .shape ci dà le dimensioni complete: [Batch, Time, Features]
+        # Trasformiamo in list per una stampa più pulita (es. [64, 48, 12])
+        input_shape = list(batch_x.shape)   
+        target_shape = list(batch_y.shape)  
+
+        # --- STAMPA DETTAGLIATA ---
+        print(f"   Batch {i+1}/{num_batches} | "
+              f"Loss: {running_loss:.6f} | "
+              f"Samples: {current_batch_size} | "
+              f"In Shape: {input_shape} | "
+              f"Out Shape: {target_shape}")
+
+    return running_loss / num_batches
 
 
 def validate_one_epoch(model, dataloader, loss_fn, device):

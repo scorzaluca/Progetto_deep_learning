@@ -2,6 +2,7 @@
 # DATASET PARAMETERS
 DATA_PATH = "data/raw/wx_dataset.xlsx"
 LABEL_PATH = "data/raw/pv_dataset.xlsx"
+
 TARGET_COL = "pv_power"
 DATE_COL = "dt_iso"
 COLUMNS_TO_REMOVE = ["lat", "lon", DATE_COL]
@@ -16,6 +17,7 @@ PREPROCESS_CONFIG = {
     "fill_na_column": FILLNA_COLUMN,
 }
 
+ADJUSTED_DF="data/processed/adjusted_ds.csv"
 
 # -----------------------------SAMPLING----------------------------------
 # --- SAMPLING Parameters (I più importanti) ---
