@@ -6,9 +6,9 @@ import random
 import numpy as np
 import torch
 import pandas as pd
-from config import TARGET_COL, SAMPLING_CONFIG, SCREENING_CONFIG, INTENSIVE_CONFIG
-from DataLoading import TS_Cross_Validator
-from Tuning import run_screening, run_intensive
+from .config import TARGET_COL, SAMPLING_CONFIG, SCREENING_CONFIG, INTENSIVE_CONFIG
+from .DataLoading import TS_Cross_Validator
+from .Tuning import run_screening, run_intensive
 
 # Modalita: "screening" o "intensive"
 MODE = "screening"

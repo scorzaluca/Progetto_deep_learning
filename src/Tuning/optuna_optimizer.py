@@ -42,10 +42,7 @@ class OptunaOptimizer:
         self.storage_path = storage_path
 
         # Importa config per baseline MASE
-        import sys
-
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-        from config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
+        from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
 
         self.naive_mae_per_fold = NAIVE_MAE_PER_FOLD
         self.lookback = LOOKBACK
@@ -63,7 +60,7 @@ class OptunaOptimizer:
             nn.Module: istanza del modello
         """
         if self.model_name == "lstm":
-            from ModelClasses import LSTM
+            from ..ModelClasses import LSTM
 
             model_config = {
                 "hidden_size": params["hidden_size"],
@@ -76,7 +73,7 @@ class OptunaOptimizer:
             return LSTM(model_config=model_config, train_loader=train_loader)
 
         elif self.model_name == "dlinear":
-            from ModelClasses import DLinear
+            from ..ModelClasses import DLinear
 
             model_config = {
                 "lookback": self.lookback,
@@ -86,7 +83,7 @@ class OptunaOptimizer:
             return DLinear(model_config=model_config, train_loader=train_loader)
 
         elif self.model_name == "patchtst":
-            from ModelClasses import PatchTST
+            from ..ModelClasses import PatchTST
 
             model_config = {
                 "patch_length": params["patch_length"],

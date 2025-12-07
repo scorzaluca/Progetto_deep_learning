@@ -7,7 +7,7 @@ import torch
 import numpy as np
 import random
 import os
-from config import (
+from .config import (
     TARGET_COL,
     SAMPLING_CONFIG,
     EPOCHS,
@@ -17,10 +17,10 @@ from config import (
     DLINEAR_CONFIG,
     RESULTS_DIR,
 )
-from DataLoading import TS_Cross_Validator
-from Training.engine import fit_model
-from Training.evaluation import evaluate_model
-from ModelClasses import PatchTST, LSTM, DLinear
+from .DataLoading import TS_Cross_Validator
+from .Training.engine import fit_model
+from .Training.evaluation import evaluate_model
+from .ModelClasses import PatchTST, LSTM, DLinear
 
 SEED = 42
 DATA_PATH = "data/processed/adjusted_ds.csv"

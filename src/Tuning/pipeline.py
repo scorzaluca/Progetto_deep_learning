@@ -213,10 +213,7 @@ def _train_final_model(
     import torch.nn as nn
 
     # Import config per parametri
-    import sys
-
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-    from config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
+    from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
 
     lr = best_params.get("lr", 0.001)
 
@@ -228,7 +225,7 @@ def _train_final_model(
 
         # Crea modello
         if model_name == "lstm":
-            from ModelClasses import LSTM
+            from ..ModelClasses import LSTM
 
             model_config = {
                 "hidden_size": best_params["hidden_size"],
@@ -241,7 +238,7 @@ def _train_final_model(
             model = LSTM(model_config=model_config, train_loader=train_loader)
 
         elif model_name == "dlinear":
-            from ModelClasses import DLinear
+            from ..ModelClasses import DLinear
 
             model_config = {
                 "lookback": LOOKBACK,
@@ -251,7 +248,7 @@ def _train_final_model(
             model = DLinear(model_config=model_config, train_loader=train_loader)
 
         elif model_name == "patchtst":
-            from ModelClasses import PatchTST
+            from ..ModelClasses import PatchTST
 
             model_config = {
                 "patch_length": best_params["patch_length"],

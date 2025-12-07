@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from config import NAIVE_MAE_PER_FOLD
+from ..config import NAIVE_MAE_PER_FOLD
 
 
 def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):

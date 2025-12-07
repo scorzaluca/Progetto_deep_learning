@@ -1,6 +1,6 @@
 import torch.nn as nn
 from transformers import PatchTSTConfig, PatchTSTForPrediction
-from config import LOOKBACK, HORIZON
+from ..config import LOOKBACK, HORIZON
 
 
 class PatchTST(nn.Module):

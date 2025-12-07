@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import MinMaxScaler
 from .sampler import PVForecastDataset
-from Utils import plot_cv_indices
+from ..Utils import plot_cv_indices
 
 
 class TS_Cross_Validator:
@@ -35,11 +35,6 @@ class TS_Cross_Validator:
         # (Questa parte va bene, è logica pura)
         train_df = self.df.iloc[train_indices]
         val_df = self.df.iloc[val_indices]
-
-        # Dimension Control
-        if len(train_df) <= self.lookback + self.horizon:
-            print(f"Skipping fold {experiment_idx}: Train set troppo piccolo.")
-            return None, None, None
 
         # Scaling
         scaler = MinMaxScaler()
