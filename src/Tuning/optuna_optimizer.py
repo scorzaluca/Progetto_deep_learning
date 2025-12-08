@@ -72,15 +72,25 @@ class OptunaOptimizer:
             }
             return LSTM(model_config=model_config, train_loader=train_loader)
 
-        elif self.model_name == "dlinear":
-            from ..ModelClasses import DLinear
+        elif self.model_name == "dlinearm":
+            from ..ModelClasses import DLinearM
 
             model_config = {
                 "lookback": self.lookback,
                 "horizon": self.horizon,
                 "kernel_size": params["kernel_size"],
             }
-            return DLinear(model_config=model_config, train_loader=train_loader)
+            return DLinearM(model_config=model_config, train_loader=train_loader)
+
+        elif self.model_name == "dlineari":
+            from ..ModelClasses import DLinearI
+
+            model_config = {
+                "lookback": self.lookback,
+                "horizon": self.horizon,
+                "kernel_size": params["kernel_size"],
+            }
+            return DLinearI(model_config=model_config, train_loader=train_loader)
 
         elif self.model_name == "patchtst":
             from ..ModelClasses import PatchTST

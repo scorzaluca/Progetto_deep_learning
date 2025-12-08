@@ -35,7 +35,7 @@ def run_screening(
             "ranking": ["patchtst", "dlinear", "lstm"]  # ordinato per MASE
         }
     """
-    models = ["lstm", "dlinear", "patchtst"]
+    models = ["lstm", "dlinearm", "dlineari", "patchtst"]
     results = {}
 
     n_trials = 2 if dry_run else config["n_trials"]
@@ -237,15 +237,25 @@ def _train_final_model(
             }
             model = LSTM(model_config=model_config, train_loader=train_loader)
 
-        elif model_name == "dlinear":
-            from ..ModelClasses import DLinear
+        elif model_name == "dlinearm":
+            from ..ModelClasses import DLinearM
 
             model_config = {
                 "lookback": LOOKBACK,
                 "horizon": HORIZON,
                 "kernel_size": best_params["kernel_size"],
             }
-            model = DLinear(model_config=model_config, train_loader=train_loader)
+            model = DLinearM(model_config=model_config, train_loader=train_loader)
+
+        elif model_name == "dlineari":
+            from ..ModelClasses import DLinearI
+
+            model_config = {
+                "lookback": LOOKBACK,
+                "horizon": HORIZON,
+                "kernel_size": best_params["kernel_size"],
+            }
+            model = DLinearI(model_config=model_config, train_loader=train_loader)
 
         elif model_name == "patchtst":
             from ..ModelClasses import PatchTST

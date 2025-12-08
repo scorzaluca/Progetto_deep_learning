@@ -20,7 +20,7 @@ from .config import (
 from .DataLoading import TS_Cross_Validator
 from .Training.engine import fit_model
 from .Training.evaluation import evaluate_model
-from .ModelClasses import PatchTST, LSTM, DLinear
+from .ModelClasses import PatchTST, LSTM, DLinearM
 
 SEED = 42
 DATA_PATH = "data/processed/adjusted_ds.csv"
@@ -48,7 +48,7 @@ def main():
     validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
     folds = validator.get_folds()
 
-    models_to_train = ["LSTM", "DLinear", "PatchTST"]
+    models_to_train = ["LSTM", "DLinearM", "PatchTST"]
 
     for fold_idx, (train_loader, val_loader, scaler) in enumerate(folds):
         print(f"\n{'=' * 60}")
@@ -66,8 +66,8 @@ def main():
                 )
             elif model_name == "LSTM":
                 model = LSTM(model_config=LSTM_CONFIG, train_loader=train_loader)
-            elif model_name == "DLinear":
-                model = DLinear(model_config=DLINEAR_CONFIG, train_loader=train_loader)
+            elif model_name == "DLinearM":
+                model = DLinearM(model_config=DLINEAR_CONFIG, train_loader=train_loader)
 
             model.to(device)
 

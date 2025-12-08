@@ -63,7 +63,8 @@ def get_patchtst_space(trial) -> dict:
 # Mapping nome modello -> funzione spazio
 SPACE_REGISTRY = {
     "lstm": get_lstm_space,
-    "dlinear": get_dlinear_space,
+    "dlinearm": get_dlinear_space,
+    "dlineari": get_dlinear_space,  # DLinear-I usa stesso spazio di DLinear
     "patchtst": get_patchtst_space,
 }
 

@@ -8,13 +8,12 @@ LOOKBACK = 48  # Quante ore guardo indietro (Input X)
 HORIZON = 24  # Quante ore prevedo avanti (Target Y)
 
 # --- LSTM ---
+# Nota: bidirectional non è configurabile (forzato a False per forecasting)
 LSTM_CONFIG = {
     "hidden_size": 64,
     "output_size": HORIZON,
     "num_layers": 1,
     "dropout": 0.0,
-    "bidirectional": False,
-    "batch_first": True,
 }
 
 # --- DLinear ---
