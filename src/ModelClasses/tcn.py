@@ -74,17 +74,15 @@ class TCN(nn.Module):
     a diverse scale, senza data leakage.
     """
 
-    def __init__(self, model_config: dict, train_loader):
+    def __init__(self, model_config: dict):
         """
         Args:
             model_config: Dizionario con i parametri del modello (da config.py).
-            train_loader: Il DataLoader creato nel data_loader.py.
         """
         super(TCN, self).__init__()
 
-        # --- LETTURA DINAMICA dal train_loader (come LSTM e PatchTST) ---
-        dataset = train_loader.dataset
-        self.input_size = dataset.data_tensor.shape[1]
+        # --- Lettura parametri da config (non più da train_loader) ---
+        self.input_size = model_config.get("input_size", 25)
 
         # Parametri da configurazione (come gli altri modelli)
         self.output_size = model_config.get("output_size", 24)
@@ -93,7 +91,7 @@ class TCN(nn.Module):
         self.kernel_size = model_config.get("kernel_size", 3)
         self.dropout = model_config.get("dropout", 0.2)
 
-        print(f"TCN - Features rilevate dal train_loader: {self.input_size}")
+        print(f"TCN - Features: {self.input_size}")
 
         # --- COSTRUZIONE DELLA RETE TCN ---
         layers = []

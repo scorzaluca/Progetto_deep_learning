@@ -4,36 +4,49 @@ from ..config import LOOKBACK, HORIZON
 
 
 class PatchTST(nn.Module):
-    def __init__(self, model_config: dict, train_loader):
+    """
+    PatchTST per PV Power Forecasting.
+
+    PatchTST è un Transformer specializzato per time series che:
+    1. Divide la sequenza in patch (segmenti sovrapposti) invece di elaborare ogni timestep
+    2. Usa Channel Independence: ogni feature è processata separatamente con gli stessi pesi
+    3. Applica self-attention per catturare dipendenze temporali a lungo raggio
+
+    Vantaggi del patching:
+    - Riduce la lunghezza della sequenza per l'attention (48 timestep → ~5 patch)
+    - Ogni patch cattura pattern locali (es. mezzo ciclo giornaliero con patch_length=16)
+    - L'overlap (stride < patch_length) assicura continuità tra patch
+    """
+
+    def __init__(self, model_config: dict):
         """
         Wrapper per il modello PatchTST di HuggingFace.
 
         Args:
             model_config: Dizionario con i parametri del modello.
-            train_loader: Il DataLoader che hai creato nel data_loader.py.
         """
         super().__init__()
 
-        if train_loader is None:
-            raise ValueError("Devi passare il train_loader!")
-
-        # 1. ACCESSO AL DATASET
-        dataset = train_loader.dataset
-
-        # 2. ACCESSO AL TENSORE DATI
-        # Shape: [Righe, Features] -> Prendiamo l'indice 1 (Features)
-        self.num_channels = dataset.data_tensor.shape[1]
-
-        # 3. SALVIAMO L'INDICE DEL TARGET (pv_power)
-        self.target_idx = dataset.target_col_idx
+        # Lettura parametri da config (non più da train_loader)
+        self.num_channels = model_config.get("num_channels", 25)
+        self.target_idx = model_config.get("target_idx", 24)
 
         print(
-            f"PatchTST - Features rilevate: {self.num_channels}, target_idx: {self.target_idx}"
+            f"PatchTST - Features: {self.num_channels}, target_idx: {self.target_idx}"
         )
 
         self.lookback = LOOKBACK
         self.horizon = HORIZON
 
+        # Configurazione del modello HuggingFace
+        # - context_length: finestra di input (lookback)
+        # - prediction_length: orizzonte di previsione
+        # - num_input_channels: numero di feature (Channel Independence)
+        # - num_targets: predice tutte le feature, poi estraiamo solo il target
+        # - patch_length: dimensione di ogni patch (16h = più di mezzo ciclo giornaliero)
+        # - stride: passo tra patch (8h overlap per continuità)
+        # - d_model: dimensione embedding del transformer
+        # - n_heads: numero di attention heads (d_model deve essere divisibile per n_heads)
         hf_config = PatchTSTConfig(
             context_length=self.lookback,
             prediction_length=self.horizon,
@@ -60,8 +73,11 @@ class PatchTST(nn.Module):
         Input x: (Batch, Lookback, Num_Channels)
         Output:  (Batch, Horizon, 1) -> Solo la predizione per pv_power
         """
+        # Il modello HuggingFace restituisce prediction_outputs con shape:
+        # (Batch, Horizon, Num_Channels) - predizioni per TUTTE le feature
         full_output = self.model(past_values=x).prediction_outputs
 
         # Estraiamo solo il canale target (pv_power)
+        # Lo slicing [idx : idx + 1] mantiene la dimensione 3D
         target_output = full_output[:, :, self.target_idx : self.target_idx + 1]
         return target_output

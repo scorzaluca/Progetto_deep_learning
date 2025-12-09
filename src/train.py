@@ -23,7 +23,7 @@ from .Training.evaluation import evaluate_model
 from .ModelClasses import PatchTST, LSTM, DLinearM
 
 SEED = 42
-DATA_PATH = "data/processed/adjusted_ds.csv"
+DATA_PATH = "data/processed/preprocessed_ds.csv"
 
 
 def set_seed(seed: int):
@@ -60,14 +60,13 @@ def main():
         for model_name in models_to_train:
             print(f"\nTraining {model_name}...")
 
+            # I modelli ora prendono solo model_config, non train_loader
             if model_name == "PatchTST":
-                model = PatchTST(
-                    model_config=PATCHTST_CONFIG, train_loader=train_loader
-                )
+                model = PatchTST(model_config=PATCHTST_CONFIG)
             elif model_name == "LSTM":
-                model = LSTM(model_config=LSTM_CONFIG, train_loader=train_loader)
+                model = LSTM(model_config=LSTM_CONFIG)
             elif model_name == "DLinearM":
-                model = DLinearM(model_config=DLINEAR_CONFIG, train_loader=train_loader)
+                model = DLinearM(model_config=DLINEAR_CONFIG)
 
             model.to(device)
 

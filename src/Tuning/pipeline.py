@@ -213,7 +213,7 @@ def _train_final_model(
     import torch.nn as nn
 
     # Import config per parametri
-    from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
+    from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON, INPUT_SIZE, TARGET_IDX
 
     lr = best_params.get("lr", 0.001)
 
@@ -223,44 +223,48 @@ def _train_final_model(
     for fold_idx, (train_loader, val_loader, _) in enumerate(folds):
         print(f"  Training fold {fold_idx + 1}/{len(folds)}...")
 
-        # Crea modello
+        # Crea modello (non usa più train_loader)
         if model_name == "lstm":
             from ..ModelClasses import LSTM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "hidden_size": best_params["hidden_size"],
                 "output_size": HORIZON,
                 "num_layers": best_params["num_layers"],
                 "dropout": best_params["dropout"],
                 "bidirectional": False,
-                "batch_first": True,
             }
-            model = LSTM(model_config=model_config, train_loader=train_loader)
+            model = LSTM(model_config=model_config)
 
         elif model_name == "dlinearm":
             from ..ModelClasses import DLinearM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "lookback": LOOKBACK,
                 "horizon": HORIZON,
                 "kernel_size": best_params["kernel_size"],
             }
-            model = DLinearM(model_config=model_config, train_loader=train_loader)
+            model = DLinearM(model_config=model_config)
 
         elif model_name == "dlineari":
             from ..ModelClasses import DLinearI
 
             model_config = {
+                "target_idx": TARGET_IDX,
                 "lookback": LOOKBACK,
                 "horizon": HORIZON,
                 "kernel_size": best_params["kernel_size"],
             }
-            model = DLinearI(model_config=model_config, train_loader=train_loader)
+            model = DLinearI(model_config=model_config)
 
         elif model_name == "patchtst":
             from ..ModelClasses import PatchTST
 
             model_config = {
+                "num_channels": INPUT_SIZE,
+                "target_idx": TARGET_IDX,
                 "patch_length": best_params["patch_length"],
                 "stride": best_params["stride"],
                 "d_model": best_params["d_model"],
@@ -269,7 +273,7 @@ def _train_final_model(
                 "dropout": best_params["dropout"],
                 "use_cls_token": False,
             }
-            model = PatchTST(model_config=model_config, train_loader=train_loader)
+            model = PatchTST(model_config=model_config)
 
         model.to(device)
 

@@ -3,7 +3,6 @@ OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi, obiettivi e pruning.
 """
 
-import os
 import optuna
 from optuna.trial import Trial
 from optuna.pruners import MedianPruner
@@ -48,54 +47,59 @@ class OptunaOptimizer:
         self.lookback = LOOKBACK
         self.horizon = HORIZON
 
-    def _create_model(self, params: dict, train_loader):
+    def _create_model(self, params: dict):
         """
         Crea un'istanza del modello con i parametri specificati.
 
         Args:
             params: dizionario iperparametri
-            train_loader: DataLoader per rilevare input_size dinamicamente
 
         Returns:
             nn.Module: istanza del modello
         """
+        from ..config import INPUT_SIZE, TARGET_IDX
+
         if self.model_name == "lstm":
             from ..ModelClasses import LSTM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "hidden_size": params["hidden_size"],
                 "output_size": self.horizon,
                 "num_layers": params["num_layers"],
                 "dropout": params["dropout"],
                 "bidirectional": False,
-                "batch_first": True,
             }
-            return LSTM(model_config=model_config, train_loader=train_loader)
+            return LSTM(model_config=model_config)
 
         elif self.model_name == "dlinearm":
             from ..ModelClasses import DLinearM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "lookback": self.lookback,
                 "horizon": self.horizon,
                 "kernel_size": params["kernel_size"],
             }
-            return DLinearM(model_config=model_config, train_loader=train_loader)
+            return DLinearM(model_config=model_config)
 
         elif self.model_name == "dlineari":
             from ..ModelClasses import DLinearI
 
             model_config = {
+                "target_idx": TARGET_IDX,
                 "lookback": self.lookback,
                 "horizon": self.horizon,
                 "kernel_size": params["kernel_size"],
             }
-            return DLinearI(model_config=model_config, train_loader=train_loader)
+            return DLinearI(model_config=model_config)
 
         elif self.model_name == "patchtst":
             from ..ModelClasses import PatchTST
 
             model_config = {
+                "num_channels": INPUT_SIZE,
+                "target_idx": TARGET_IDX,
                 "patch_length": params["patch_length"],
                 "stride": params["stride"],
                 "d_model": params["d_model"],
@@ -104,7 +108,7 @@ class OptunaOptimizer:
                 "dropout": params["dropout"],
                 "use_cls_token": False,
             }
-            return PatchTST(model_config=model_config, train_loader=train_loader)
+            return PatchTST(model_config=model_config)
         else:
             raise ValueError(f"Modello '{self.model_name}' non supportato")
 
@@ -218,7 +222,7 @@ class OptunaOptimizer:
             train_loader, val_loader, _ = self.folds[fold_idx]
 
             # Crea modello
-            model = self._create_model(params, train_loader)
+            model = self._create_model(params)
             model.to(self.device)
 
             # Addestra e valuta

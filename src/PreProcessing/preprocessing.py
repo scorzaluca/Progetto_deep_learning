@@ -51,6 +51,11 @@ class Preprocesser:
         return self.df
 
     def dummy_variable(self):
+        """Crea dummy variables per weather_description.
+
+        Elimina weather_description_other per evitare multicollinearità (dummy trap).
+        La categoria 'other' funge da baseline implicita.
+        """
         categorie_principali = [
             "sky is clear",
             "light rain",
@@ -66,9 +71,17 @@ class Preprocesser:
             ~condizione_principale, other="other"
         )
 
+        # Crea dummy variables
         dummy_cols = pd.get_dummies(
             self.df[self.dummy_column], prefix=self.dummy_column, dtype=int
         )
+
+        # Elimina weather_description_other per evitare multicollinearità (dummy trap)
+        # La categoria 'other' diventa la baseline implicita
+        column_to_drop = f"{self.dummy_column}_other"
+        if column_to_drop in dummy_cols.columns:
+            dummy_cols = dummy_cols.drop(columns=column_to_drop)
+
         df = pd.concat([self.df, dummy_cols], axis=1)
         self.df = df.drop(columns=self.dummy_column)
 

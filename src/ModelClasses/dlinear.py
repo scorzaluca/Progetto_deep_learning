@@ -10,16 +10,14 @@ class DLinearM(nn.Module):
     Usa TUTTE le features per la predizione (cattura relazioni cross-feature).
     """
 
-    def __init__(self, model_config: dict, train_loader):
+    def __init__(self, model_config: dict):
         super(DLinearM, self).__init__()
 
-        # Parametri da configurazione
+        # Parametri da configurazione (non più da train_loader)
+        self.input_size = model_config.get("input_size", 24)
         self.lookback = model_config.get("lookback", 48)
         self.horizon = model_config.get("horizon", 24)
-        self.kernel_size = model_config.get("kernel_size", 25)
-
-        # Lettura dinamica delle features dal loader
-        self.input_size = train_loader.dataset.data_tensor.shape[1]
+        self.kernel_size = model_config.get("kernel_size", 24)
 
         print(f"DLinearM (Multivariate) - Features: {self.input_size}")
 
@@ -69,16 +67,14 @@ class DLinearI(nn.Module):
     Molto più leggero, non cattura relazioni cross-feature.
     """
 
-    def __init__(self, model_config: dict, train_loader):
+    def __init__(self, model_config: dict):
         super(DLinearI, self).__init__()
 
-        # Parametri da configurazione
+        # Parametri da configurazione (non più da train_loader)
+        self.target_idx = model_config.get("target_idx", 23)
         self.lookback = model_config.get("lookback", 48)
         self.horizon = model_config.get("horizon", 24)
-        self.kernel_size = model_config.get("kernel_size", 25)
-
-        # Target index dal dataset
-        self.target_idx = train_loader.dataset.target_col_idx
+        self.kernel_size = model_config.get("kernel_size", 24)
 
         print(f"DLinearI (Individual) - Target idx: {self.target_idx}")
 

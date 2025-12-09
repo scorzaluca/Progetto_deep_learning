@@ -5,9 +5,13 @@ Export di tutte le configurazioni dal package config.
 from .model_config import (
     LOOKBACK,
     HORIZON,
+    INPUT_SIZE,
+    TARGET_IDX,
     LSTM_CONFIG,
     DLINEAR_CONFIG,
     PATCHTST_CONFIG,
+    TCN_CONFIG,
+    NAIVE_CONFIG,
 )
 
 from .training_config import (
@@ -25,9 +29,13 @@ __all__ = [
     # Model config
     "LOOKBACK",
     "HORIZON",
+    "INPUT_SIZE",
+    "TARGET_IDX",
     "LSTM_CONFIG",
     "DLINEAR_CONFIG",
     "PATCHTST_CONFIG",
+    "TCN_CONFIG",
+    "NAIVE_CONFIG",
     # Training config
     "TARGET_COL",
     "SAMPLING_CONFIG",
