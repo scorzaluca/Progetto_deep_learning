@@ -10,7 +10,6 @@ from optuna.samplers import TPESampler
 import torch
 import torch.nn as nn
 from torch.cuda.amp import autocast, GradScaler
-from torch.utils.tensorboard import SummaryWriter
 
 from .hyperparameter_spaces import get_hyperparameter_space
 
@@ -153,14 +152,10 @@ class OptunaOptimizer:
         use_amp = self.device.type == "cuda"
         scaler = GradScaler(enabled=use_amp)
 
-        # TensorBoard: crea writer per questo run
-        run_name = f"{self.model_name}_fold{fold_idx}"
-        writer = SummaryWriter(log_dir=f"runs/{run_name}")
-
         for epoch in range(epochs):
             # --- TRAINING ---
             model.train()
-            running_loss = 0.0
+
             for batch_x, batch_y in train_loader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
@@ -182,12 +177,6 @@ class OptunaOptimizer:
                 scaler.step(optimizer)
                 scaler.update()
 
-                running_loss += loss.item()
-
-            # TensorBoard: log training loss
-            avg_loss = running_loss / len(train_loader)
-            writer.add_scalar("Loss/train", avg_loss, epoch)
-
             # --- VALIDATION ---
             model.eval()
             running_mae = 0.0
@@ -204,10 +193,6 @@ class OptunaOptimizer:
             avg_mae = running_mae / len(val_loader)
             current_mase = avg_mae / baseline_mae
 
-            # TensorBoard: log validation metrics
-            writer.add_scalar("MASE/val", current_mase, epoch)
-            writer.add_scalar("MAE/val", avg_mae, epoch)
-
             # Update best
             if current_mase < best_mase:
                 best_mase = current_mase
@@ -219,14 +204,11 @@ class OptunaOptimizer:
             if trial is not None:
                 trial.report(current_mase, epoch)
                 if trial.should_prune():
-                    writer.close()  # Chiudi writer prima di uscire
                     raise optuna.TrialPruned()
 
             # Early stopping
             if epochs_no_improve >= patience:
                 break
-
-        writer.close()  # Chiudi writer alla fine del training
 
         return best_mase
 

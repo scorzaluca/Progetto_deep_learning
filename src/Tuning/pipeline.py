@@ -35,7 +35,11 @@ def run_screening(
             "ranking": ["patchtst", "dlinear", "lstm"]  # ordinato per MASE
         }
     """
-    models = ["lstm", "dlinearm", "dlineari", "patchtst"]
+    models = [
+        "lstm",
+        "dlinearm",
+        "dlineari",
+    ]  # patchtst escluso per conflitti TensorFlow
     results = {}
 
     n_trials = 2 if dry_run else config["n_trials"]
