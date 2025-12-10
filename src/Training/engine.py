@@ -1,16 +1,133 @@
+"""
+Engine di training: funzioni per training, validazione e fit con early stopping.
+Supporta integrazione con Optuna per hyperparameter tuning.
+Include factory function per la creazione dei modelli.
+"""
+
 import copy
 import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from ..config import NAIVE_MAE_PER_FOLD
+import optuna
+from ..config import NAIVE_MAE_PER_FOLD, INPUT_SIZE, TARGET_IDX, LOOKBACK, HORIZON
 
 
-def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
+def create_model(model_name: str, params: dict) -> nn.Module:
+    """
+    Factory function per creare istanze di modelli.
+
+    Args:
+        model_name: nome del modello (lowercase): "lstm", "dlinearm", "dlineari", "patchtst", "tcn"
+        params: dizionario con iperparametri del modello.
+            Parametri comuni: nessuno (vengono presi da config)
+            LSTM: hidden_size, num_layers, dropout
+            DLinearM/I: kernel_size
+            PatchTST: patch_length, stride, d_model, n_heads, n_layers, dropout
+            TCN: hidden_size, num_layers, kernel_size, dropout
+
+    Returns:
+        nn.Module: istanza del modello (non spostata su device)
+
+    Raises:
+        ValueError: se model_name non è supportato
+    """
+    model_name = model_name.lower()
+
+    if model_name == "lstm":
+        from ..ModelClasses import LSTM
+
+        model_config = {
+            "input_size": INPUT_SIZE,
+            "hidden_size": params["hidden_size"],
+            "output_size": HORIZON,
+            "num_layers": params["num_layers"],
+            "dropout": params["dropout"],
+            "bidirectional": False,
+        }
+        return LSTM(model_config=model_config)
+
+    elif model_name == "dlinearm":
+        from ..ModelClasses import DLinearM
+
+        model_config = {
+            "input_size": INPUT_SIZE,
+            "lookback": LOOKBACK,
+            "horizon": HORIZON,
+            "kernel_size": params["kernel_size"],
+        }
+        return DLinearM(model_config=model_config)
+
+    elif model_name == "dlineari":
+        from ..ModelClasses import DLinearI
+
+        model_config = {
+            "target_idx": TARGET_IDX,
+            "lookback": LOOKBACK,
+            "horizon": HORIZON,
+            "kernel_size": params["kernel_size"],
+        }
+        return DLinearI(model_config=model_config)
+
+    elif model_name == "patchtst":
+        from ..ModelClasses import PatchTST
+
+        model_config = {
+            "num_channels": INPUT_SIZE,
+            "target_idx": TARGET_IDX,
+            "patch_length": params["patch_length"],
+            "stride": params["stride"],
+            "d_model": params["d_model"],
+            "n_heads": params["n_heads"],
+            "n_layers": params["n_layers"],
+            "dropout": params["dropout"],
+            "use_cls_token": False,
+        }
+        return PatchTST(model_config=model_config)
+
+    elif model_name == "tcn":
+        from ..ModelClasses import TCN
+
+        model_config = {
+            "input_size": INPUT_SIZE,
+            "output_size": HORIZON,
+            "hidden_size": params["hidden_size"],
+            "num_layers": params["num_layers"],
+            "kernel_size": params["kernel_size"],
+            "dropout": params["dropout"],
+        }
+        return TCN(model_config=model_config)
+
+    else:
+        raise ValueError(
+            f"Modello '{model_name}' non supportato. "
+            f"Modelli validi: lstm, dlinearm, dlineari, patchtst, tcn"
+        )
+
+
+def train_one_epoch(
+    model,
+    dataloader: DataLoader,
+    optimizer,
+    loss_fn,
+    device,
+    grad_clip_norm: float = None,
+):
     """
     Esegue un'epoca di addestramento (Forward + Backward).
+
+    Args:
+        model: Modello PyTorch.
+        dataloader: DataLoader del training set.
+        optimizer: Optimizer PyTorch.
+        loss_fn: Loss function.
+        device: Device (cuda/cpu).
+        grad_clip_norm: Se specificato, applica gradient clipping con questa norma.
+
+    Returns:
+        float: Loss media dell'epoca.
     """
-    model.train()  # Abilita dropout/batchnorm
+    model.train()
     running_loss = 0.0
 
     for batch_x, batch_y in dataloader:
@@ -21,6 +138,11 @@ def train_one_epoch(model, dataloader: DataLoader, optimizer, loss_fn, device):
         prediction = model(batch_x)
         loss = loss_fn(prediction, batch_y)
         loss.backward()
+
+        # Gradient clipping per stabilità (utile per LSTM/Transformer)
+        if grad_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
+
         optimizer.step()
 
         running_loss += loss.item()
@@ -32,14 +154,23 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
     """
     Esegue un'epoca di validazione (Solo Forward).
     Calcola MSE, MAE e RMSE.
+
+    Args:
+        model: Modello PyTorch.
+        dataloader: DataLoader del validation set.
+        loss_fn: Loss function.
+        device: Device (cuda/cpu).
+
+    Returns:
+        tuple: (avg_loss, avg_mae, avg_rmse)
     """
-    model.eval()  # Disabilita dropout
+    model.eval()
     running_loss = 0.0
-    running_mae = 0.0  # MAE per il MASE
+    running_mae = 0.0
 
-    mae_fn = nn.L1Loss()  # Funzione per calcolare il MAE
+    mae_fn = nn.L1Loss()
 
-    with torch.no_grad():  # Disabilita il calcolo dei gradienti (risparmia memoria)
+    with torch.no_grad():
         for batch_x, batch_y in dataloader:
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
@@ -64,10 +195,24 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
 
 
 def fit_model(
-    model, train_loader, val_loader, epochs, lr, device, fold_idx, patience=10
+    model,
+    train_loader,
+    val_loader,
+    epochs,
+    lr,
+    device,
+    fold_idx,
+    patience=10,
+    trial=None,
+    optimizer_cls=None,
+    optimizer_kwargs=None,
+    loss_fn=None,
+    grad_clip_norm=1.0,
+    verbose=True,
 ):
     """
     Ciclo principale di addestramento con Early Stopping.
+    Supporta integrazione con Optuna per pruning e reporting.
 
     Args:
         model: Modello PyTorch da addestrare.
@@ -78,14 +223,28 @@ def fit_model(
         device: Device (cuda o cpu).
         fold_idx: Indice del fold corrente (per calcolare MASE).
         patience: Numero di epoche senza miglioramento prima dell'early stopping.
+        trial: Oggetto optuna.Trial per pruning/reporting (opzionale).
+        optimizer_cls: Classe optimizer (default: torch.optim.Adam).
+        optimizer_kwargs: Kwargs extra per l'optimizer (es. weight_decay).
+        loss_fn: Loss function (default: nn.MSELoss()).
+        grad_clip_norm: Norma massima per gradient clipping (None per disabilitare).
+        verbose: Se True, stampa progress durante il training.
 
     Returns:
-        model: Modello addestrato con i pesi migliori.
-        history: Dizionario con le metriche per ogni epoca.
+        tuple: (model, history, best_epoch)
+            - model: Modello addestrato con i pesi migliori.
+            - history: Dizionario con le metriche per ogni epoca.
+            - best_epoch: Epoca con la migliore validation loss.
     """
-    # Definisci Optimizer e Loss qui (o passali come argomenti se vuoi più controllo)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    loss_fn = nn.MSELoss()
+    # Default optimizer e loss
+    if optimizer_cls is None:
+        optimizer_cls = torch.optim.Adam
+    if optimizer_kwargs is None:
+        optimizer_kwargs = {}
+    if loss_fn is None:
+        loss_fn = nn.MSELoss()
+
+    optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
 
     baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
 
@@ -93,18 +252,22 @@ def fit_model(
         "train_loss": [],
         "val_loss": [],
         "val_mase": [],
-        "val_rmse": [],  # Aggiunta metrica RMSE
+        "val_rmse": [],
     }
 
-    best_val_loss = float("inf")
+    best_mase = float("inf")
     epochs_no_improve = 0
-    best_model_wts = copy.deepcopy(model.state_dict())  # Copia iniziale
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_epoch = 0
 
-    print(f"Start Training on {device}...")
+    if verbose:
+        print(f"Start Training on {device}...")
 
     for epoch in range(epochs):
         # --- TRAINING ---
-        train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, device)
+        train_loss = train_one_epoch(
+            model, train_loader, optimizer, loss_fn, device, grad_clip_norm
+        )
 
         # --- VALIDATION ---
         val_loss, val_mae, val_rmse = validate_one_epoch(
@@ -120,7 +283,7 @@ def fit_model(
         history["val_rmse"].append(val_rmse)
 
         # Stampa pulita
-        if (epoch + 1) % 5 == 0 or epoch == 0:
+        if verbose and ((epoch + 1) % 5 == 0 or epoch == 0):
             print(
                 f"Epoch {epoch + 1}/{epochs} | "
                 f"Train MSE: {train_loss:.6f} | "
@@ -129,22 +292,31 @@ def fit_model(
                 f"Val RMSE: {val_rmse:.6f}"
             )
 
-        # --- EARLY STOPPING CHECK (su MSE più stabile) ---
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # --- OPTUNA INTEGRATION ---
+        if trial is not None:
+            trial.report(current_mase, epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+        # --- EARLY STOPPING CHECK (su MASE, coerente con Optuna) ---
+        if current_mase < best_mase:
+            best_mase = current_mase
             epochs_no_improve = 0
-            # Salviamo i pesi MIGLIORI, non gli ultimi!
             best_model_wts = copy.deepcopy(model.state_dict())
+            best_epoch = epoch
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= patience:
-                print(
-                    f"Early Stopping attivato all'epoca {epoch + 1}. Best Val Loss: {best_val_loss:.6f}"
-                )
+                if verbose:
+                    print(
+                        f"Early Stopping attivato all'epoca {epoch + 1}. "
+                        f"Best MASE: {best_mase:.4f}"
+                    )
                 break
 
     # IMPORTANTE: Carichiamo i pesi migliori nel modello prima di restituirlo
     model.load_state_dict(best_model_wts)
-    print("Training Completato.")
+    if verbose:
+        print("Training Completato.")
 
-    return model, history
+    return model, history, best_epoch

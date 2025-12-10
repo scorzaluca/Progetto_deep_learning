@@ -6,7 +6,13 @@ import random
 import numpy as np
 import torch
 import pandas as pd
-from .config import TARGET_COL, SAMPLING_CONFIG, SCREENING_CONFIG, INTENSIVE_CONFIG
+from .config import (
+    TARGET_COL,
+    SAMPLING_CONFIG,
+    SCREENING_CONFIG,
+    INTENSIVE_CONFIG,
+    SEED,
+)
 from .DataLoading import TS_Cross_Validator
 from .Tuning import run_screening, run_intensive
 
@@ -16,9 +22,8 @@ MODE = "screening"
 # Modello per intensive (usato solo se MODE = "intensive")
 MODEL_INTENSIVE = "lstm"
 
-SEED = 42
-DATA_PATH = "../data/processed/adjusted_ds.csv"
-RESULTS_DIR = "../results/"
+DATA_PATH = "data/processed/preprocessed_ds.csv"
+RESULTS_DIR = "/results/"
 
 
 def set_seed(seed: int):
@@ -83,7 +88,7 @@ def main():
         print("\n" + "=" * 60)
         print("RIEPILOGO SCREENING")
         print("=" * 60)
-        for model in ["lstm", "dlinear", "patchtst"]:
+        for model in ["lstm", "dlineari", "dlinearm", "patchtst", "tcn"]:
             if model in results:
                 mase = results[model].get("best_mase", "N/A")
                 if isinstance(mase, float):

@@ -19,6 +19,7 @@ SAMPLING_CONFIG = {
 }
 
 # --- TRAINING ---
+SEED = 42
 EPOCHS = 50
 LEARNING_RATE = 0.001
 
@@ -29,11 +30,12 @@ NAIVE_MAE_PER_FOLD = [0.06171385527493945, 0.07321843994187488, 0.06725753733105
 RESULTS_DIR = "./results/"
 
 # --- OPTUNA ---
+# SCREENING: 8 trials × 5 modelli × ~20 epoche = ~2.5h su GTX 1660 Ti
 SCREENING_CONFIG = {
-    "n_trials": 15,
+    "n_trials": 8,
     "n_folds": 1,  # Usa fold più grande (indice 2)
     "patience": 5,
-    "epochs": 30,
+    "epochs": 20,
 }
 
 INTENSIVE_CONFIG = {

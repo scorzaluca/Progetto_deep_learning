@@ -17,6 +17,7 @@ from .model_config import (
 from .training_config import (
     TARGET_COL,
     SAMPLING_CONFIG,
+    SEED,
     EPOCHS,
     LEARNING_RATE,
     NAIVE_MAE_PER_FOLD,
@@ -39,6 +40,7 @@ __all__ = [
     # Training config
     "TARGET_COL",
     "SAMPLING_CONFIG",
+    "SEED",
     "EPOCHS",
     "LEARNING_RATE",
     "NAIVE_MAE_PER_FOLD",

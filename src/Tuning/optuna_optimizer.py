@@ -1,6 +1,7 @@
 """
 OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi, obiettivi e pruning.
+Utilizza fit_model da engine.py per evitare duplicazione di logica.
 """
 
 import optuna
@@ -8,9 +9,10 @@ from optuna.trial import Trial
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 import torch
-import torch.nn as nn
 
 from .hyperparameter_spaces import get_hyperparameter_space
+from ..Training.engine import fit_model, create_model
+from ..config import SEED
 
 
 class OptunaOptimizer:
@@ -25,31 +27,28 @@ class OptunaOptimizer:
         device: torch.device,
         config: dict,
         storage_path: str = None,
+        verbose: bool = False,
     ):
         """
         Args:
-            model_name: nome del modello ("lstm", "dlinear", "patchtst")
+            model_name: nome del modello ("lstm", "dlinearm", "dlineari", "patchtst", "tcn")
             folds: lista di tuple (train_loader, val_loader, scaler)
             device: torch device (cuda/cpu)
             config: dizionario con n_trials, n_folds, patience, epochs
             storage_path: percorso del database SQLite per persistenza
+            verbose: se True, stampa messaggi di debug
         """
         self.model_name = model_name.lower()
         self.folds = folds
         self.device = device
         self.config = config
         self.storage_path = storage_path
-
-        # Importa config per baseline MASE
-        from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
-
-        self.naive_mae_per_fold = NAIVE_MAE_PER_FOLD
-        self.lookback = LOOKBACK
-        self.horizon = HORIZON
+        self.verbose = verbose
 
     def _create_model(self, params: dict):
         """
         Crea un'istanza del modello con i parametri specificati.
+        Utilizza la factory function create_model() da engine.py.
 
         Args:
             params: dizionario iperparametri
@@ -57,140 +56,7 @@ class OptunaOptimizer:
         Returns:
             nn.Module: istanza del modello
         """
-        from ..config import INPUT_SIZE, TARGET_IDX
-
-        if self.model_name == "lstm":
-            from ..ModelClasses import LSTM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "hidden_size": params["hidden_size"],
-                "output_size": self.horizon,
-                "num_layers": params["num_layers"],
-                "dropout": params["dropout"],
-                "bidirectional": False,
-            }
-            return LSTM(model_config=model_config)
-
-        elif self.model_name == "dlinearm":
-            from ..ModelClasses import DLinearM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "lookback": self.lookback,
-                "horizon": self.horizon,
-                "kernel_size": params["kernel_size"],
-            }
-            return DLinearM(model_config=model_config)
-
-        elif self.model_name == "dlineari":
-            from ..ModelClasses import DLinearI
-
-            model_config = {
-                "target_idx": TARGET_IDX,
-                "lookback": self.lookback,
-                "horizon": self.horizon,
-                "kernel_size": params["kernel_size"],
-            }
-            return DLinearI(model_config=model_config)
-
-        elif self.model_name == "patchtst":
-            from ..ModelClasses import PatchTST
-
-            model_config = {
-                "num_channels": INPUT_SIZE,
-                "target_idx": TARGET_IDX,
-                "patch_length": params["patch_length"],
-                "stride": params["stride"],
-                "d_model": params["d_model"],
-                "n_heads": params["n_heads"],
-                "n_layers": params["n_layers"],
-                "dropout": params["dropout"],
-                "use_cls_token": False,
-            }
-            return PatchTST(model_config=model_config)
-        else:
-            raise ValueError(f"Modello '{self.model_name}' non supportato")
-
-    def _train_and_evaluate(
-        self,
-        model: nn.Module,
-        train_loader,
-        val_loader,
-        lr: float,
-        fold_idx: int,
-        trial: Trial = None,
-    ) -> float:
-        """
-        Addestra il modello e ritorna il best MASE sul validation set.
-        Supporta pruning Optuna.
-
-        Args:
-            model: modello da addestrare
-            train_loader: DataLoader training
-            val_loader: DataLoader validation
-            lr: learning rate
-            fold_idx: indice del fold (per baseline MASE)
-            trial: oggetto Trial per reporting/pruning
-
-        Returns:
-            float: best MASE raggiunto
-        """
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        loss_fn = nn.MSELoss()
-        mae_fn = nn.L1Loss()
-
-        baseline_mae = self.naive_mae_per_fold[fold_idx]
-        epochs = self.config["epochs"]
-        patience = self.config["patience"]
-
-        best_mase = float("inf")
-        epochs_no_improve = 0
-
-        for epoch in range(epochs):
-            # --- TRAINING ---
-            model.train()
-            for batch_x, batch_y in train_loader:
-                batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
-
-                optimizer.zero_grad()
-                pred = model(batch_x)
-                loss = loss_fn(pred, batch_y)
-                loss.backward()
-                optimizer.step()
-
-            # --- VALIDATION ---
-            model.eval()
-            running_mae = 0.0
-            with torch.no_grad():
-                for batch_x, batch_y in val_loader:
-                    batch_x = batch_x.to(self.device)
-                    batch_y = batch_y.to(self.device)
-                    pred = model(batch_x)
-                    running_mae += mae_fn(pred, batch_y).item()
-
-            avg_mae = running_mae / len(val_loader)
-            current_mase = avg_mae / baseline_mae
-
-            # Update best
-            if current_mase < best_mase:
-                best_mase = current_mase
-                epochs_no_improve = 0
-            else:
-                epochs_no_improve += 1
-
-            # Optuna reporting e pruning
-            if trial is not None:
-                trial.report(current_mase, epoch)
-                if trial.should_prune():
-                    raise optuna.TrialPruned()
-
-            # Early stopping
-            if epochs_no_improve >= patience:
-                break
-
-        return best_mase
+        return create_model(self.model_name, params)
 
     def _objective(self, trial: Trial) -> float:
         """
@@ -206,6 +72,9 @@ class OptunaOptimizer:
         # 1. Genera iperparametri
         params = get_hyperparameter_space(self.model_name, trial)
         lr = params.pop("lr")  # LR è gestito separatamente
+
+        # Estrai grad_clip_norm se presente (altrimenti default)
+        grad_clip_norm = params.pop("grad_clip_norm", 1.0)
 
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
@@ -225,11 +94,24 @@ class OptunaOptimizer:
             model = self._create_model(params)
             model.to(self.device)
 
-            # Addestra e valuta
-            mase = self._train_and_evaluate(
-                model, train_loader, val_loader, lr, fold_idx, trial
+            # Usa fit_model da engine.py (consolidato)
+            _, history, _ = fit_model(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                epochs=self.config["epochs"],
+                lr=lr,
+                device=self.device,
+                fold_idx=fold_idx,
+                patience=self.config["patience"],
+                trial=trial,  # Passa trial per pruning
+                grad_clip_norm=grad_clip_norm,
+                verbose=self.verbose,  # Controllato da parametro classe
             )
-            mase_scores.append(mase)
+
+            # Prendi il miglior MASE dalla history
+            best_mase = min(history["val_mase"])
+            mase_scores.append(best_mase)
 
         return sum(mase_scores) / len(mase_scores)
 
@@ -259,7 +141,7 @@ class OptunaOptimizer:
             storage=storage,
             load_if_exists=True,
             direction="minimize",
-            sampler=TPESampler(seed=42),
+            sampler=TPESampler(seed=SEED),
             pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=5),
         )
 

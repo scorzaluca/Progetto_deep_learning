@@ -1,5 +1,6 @@
 """
 Pipeline di ottimizzazione: funzioni per eseguire screening e intensive optimization.
+Utilizza fit_model da engine.py per evitare duplicazione di logica.
 """
 
 import os
@@ -8,6 +9,7 @@ import torch
 from datetime import datetime
 
 from .optuna_optimizer import OptunaOptimizer
+from ..Training.engine import fit_model, create_model
 
 
 def run_screening(
@@ -15,30 +17,28 @@ def run_screening(
     device: torch.device,
     config: dict,
     results_dir: str,
-    dry_run: bool = False,
 ) -> dict:
     """
-    Esegue lo screening su tutti i modelli (LSTM, DLinear, PatchTST).
+    Esegue lo screening su tutti i modelli (LSTM, DLinear, PatchTST, TCN).
 
     Args:
         folds: lista di tuple (train_loader, val_loader, scaler)
         device: torch device
         config: dizionario SCREENING_CONFIG
         results_dir: directory per salvare i risultati
-        dry_run: se True, esegue solo 2 trial per test
 
     Returns:
         dict: {
             "lstm": {"best_mase": float, "best_params": dict},
-            "dlinear": {"best_mase": float, "best_params": dict},
+            "dlinearm": {"best_mase": float, "best_params": dict},
             "patchtst": {"best_mase": float, "best_params": dict},
             "ranking": ["patchtst", "dlinear", "lstm"]  # ordinato per MASE
         }
     """
-    models = ["lstm", "dlinearm", "dlineari", "patchtst"]
+    models = ["lstm", "dlinearm", "dlineari", "patchtst", "tcn"]
     results = {}
 
-    n_trials = 2 if dry_run else config["n_trials"]
+    n_trials = config["n_trials"]
     storage_path = os.path.join(results_dir, "optuna_studies.db")
 
     print("\n" + "=" * 60)
@@ -56,6 +56,7 @@ def run_screening(
                 device=device,
                 config=config,
                 storage_path=storage_path,
+                verbose=True,
             )
 
             study_name = (
@@ -106,19 +107,17 @@ def run_intensive(
     device: torch.device,
     config: dict,
     results_dir: str,
-    dry_run: bool = False,
 ) -> dict:
     """
     Esegue l'ottimizzazione intensiva su UN singolo modello.
     Salva i pesi del modello migliore.
 
     Args:
-        model_name: nome del modello ("lstm", "dlinear", "patchtst")
+        model_name: nome del modello ("lstm", "dlinearm", "dlineari", "patchtst", "tcn")
         folds: lista di tuple (train_loader, val_loader, scaler)
         device: torch device
         config: dizionario INTENSIVE_CONFIG
         results_dir: directory per salvare i risultati
-        dry_run: se True, esegue solo 2 trial per test
 
     Returns:
         dict: {
@@ -128,7 +127,7 @@ def run_intensive(
         }
     """
     model_name = model_name.lower()
-    n_trials = 2 if dry_run else config["n_trials"]
+    n_trials = config["n_trials"]
     storage_path = os.path.join(results_dir, "optuna_studies.db")
 
     print("\n" + "=" * 60)
@@ -205,17 +204,15 @@ def _train_final_model(
     """
     Addestra il modello con i best params e salva i pesi.
     Usa il fold con il miglior MASE per salvare i pesi.
+    Utilizza create_model() e fit_model() da engine.py.
 
     Returns:
         str: percorso del checkpoint salvato
     """
     import copy
-    import torch.nn as nn
-
-    # Import config per parametri
-    from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON, INPUT_SIZE, TARGET_IDX
 
     lr = best_params.get("lr", 0.001)
+    grad_clip_norm = best_params.get("grad_clip_norm", 1.0)
 
     best_mase_overall = float("inf")
     best_model_state = None
@@ -223,109 +220,30 @@ def _train_final_model(
     for fold_idx, (train_loader, val_loader, _) in enumerate(folds):
         print(f"  Training fold {fold_idx + 1}/{len(folds)}...")
 
-        # Crea modello (non usa più train_loader)
-        if model_name == "lstm":
-            from ..ModelClasses import LSTM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "hidden_size": best_params["hidden_size"],
-                "output_size": HORIZON,
-                "num_layers": best_params["num_layers"],
-                "dropout": best_params["dropout"],
-                "bidirectional": False,
-            }
-            model = LSTM(model_config=model_config)
-
-        elif model_name == "dlinearm":
-            from ..ModelClasses import DLinearM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "lookback": LOOKBACK,
-                "horizon": HORIZON,
-                "kernel_size": best_params["kernel_size"],
-            }
-            model = DLinearM(model_config=model_config)
-
-        elif model_name == "dlineari":
-            from ..ModelClasses import DLinearI
-
-            model_config = {
-                "target_idx": TARGET_IDX,
-                "lookback": LOOKBACK,
-                "horizon": HORIZON,
-                "kernel_size": best_params["kernel_size"],
-            }
-            model = DLinearI(model_config=model_config)
-
-        elif model_name == "patchtst":
-            from ..ModelClasses import PatchTST
-
-            model_config = {
-                "num_channels": INPUT_SIZE,
-                "target_idx": TARGET_IDX,
-                "patch_length": best_params["patch_length"],
-                "stride": best_params["stride"],
-                "d_model": best_params["d_model"],
-                "n_heads": best_params["n_heads"],
-                "n_layers": best_params["n_layers"],
-                "dropout": best_params["dropout"],
-                "use_cls_token": False,
-            }
-            model = PatchTST(model_config=model_config)
-
+        # Crea modello usando factory function
+        model = create_model(model_name, best_params)
         model.to(device)
 
-        # Training loop
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        loss_fn = nn.MSELoss()
-        mae_fn = nn.L1Loss()
+        # Usa fit_model da engine.py (consolidato)
+        trained_model, history, _ = fit_model(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            epochs=config["epochs"],
+            lr=lr,
+            device=device,
+            fold_idx=fold_idx,
+            patience=config["patience"],
+            grad_clip_norm=grad_clip_norm,
+            verbose=False,
+        )
 
-        baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
-        best_fold_mase = float("inf")
-        best_fold_state = None
-        epochs_no_improve = 0
-
-        for epoch in range(config["epochs"]):
-            model.train()
-            for batch_x, batch_y in train_loader:
-                batch_x = batch_x.to(device)
-                batch_y = batch_y.to(device)
-
-                optimizer.zero_grad()
-                pred = model(batch_x)
-                loss = loss_fn(pred, batch_y)
-                loss.backward()
-                optimizer.step()
-
-            model.eval()
-            running_mae = 0.0
-            with torch.no_grad():
-                for batch_x, batch_y in val_loader:
-                    batch_x = batch_x.to(device)
-                    batch_y = batch_y.to(device)
-                    pred = model(batch_x)
-                    running_mae += mae_fn(pred, batch_y).item()
-
-            avg_mae = running_mae / len(val_loader)
-            current_mase = avg_mae / baseline_mae
-
-            if current_mase < best_fold_mase:
-                best_fold_mase = current_mase
-                best_fold_state = copy.deepcopy(model.state_dict())
-                epochs_no_improve = 0
-            else:
-                epochs_no_improve += 1
-
-            if epochs_no_improve >= config["patience"]:
-                break
-
+        best_fold_mase = min(history["val_mase"])
         print(f"    Fold {fold_idx + 1} - Best MASE: {best_fold_mase:.4f}")
 
         if best_fold_mase < best_mase_overall:
             best_mase_overall = best_fold_mase
-            best_model_state = best_fold_state
+            best_model_state = copy.deepcopy(trained_model.state_dict())
 
     # Salva checkpoint
     checkpoint_dir = os.path.join(results_dir, "checkpoints")
