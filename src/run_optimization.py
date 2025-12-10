@@ -2,6 +2,7 @@
 Script per l'ottimizzazione degli iperparametri con Optuna.
 """
 
+import os
 import random
 import numpy as np
 import torch
@@ -17,8 +18,11 @@ MODE = "screening"
 MODEL_INTENSIVE = "lstm"
 
 SEED = 42
-DATA_PATH = "../data/processed/adjusted_ds.csv"
+DATA_PATH = "../data/processed/preprocessed_ds.csv"
 RESULTS_DIR = "../results/"
+
+# Crea la directory dei risultati se non esiste
+os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 def set_seed(seed: int):

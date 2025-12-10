@@ -9,6 +9,8 @@ from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 import torch
 import torch.nn as nn
+from torch.cuda.amp import autocast, GradScaler
+from torch.utils.tensorboard import SummaryWriter
 
 from .hyperparameter_spaces import get_hyperparameter_space
 
@@ -123,7 +125,7 @@ class OptunaOptimizer:
     ) -> float:
         """
         Addestra il modello e ritorna il best MASE sul validation set.
-        Supporta pruning Optuna.
+        Supporta pruning Optuna e AMP (Automatic Mixed Precision).
 
         Args:
             model: modello da addestrare
@@ -136,7 +138,7 @@ class OptunaOptimizer:
         Returns:
             float: best MASE raggiunto
         """
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
         loss_fn = nn.MSELoss()
         mae_fn = nn.L1Loss()
 
@@ -147,18 +149,44 @@ class OptunaOptimizer:
         best_mase = float("inf")
         epochs_no_improve = 0
 
+        # AMP: usa mixed precision solo su CUDA
+        use_amp = self.device.type == "cuda"
+        scaler = GradScaler(enabled=use_amp)
+
+        # TensorBoard: crea writer per questo run
+        run_name = f"{self.model_name}_fold{fold_idx}"
+        writer = SummaryWriter(log_dir=f"runs/{run_name}")
+
         for epoch in range(epochs):
             # --- TRAINING ---
             model.train()
+            running_loss = 0.0
             for batch_x, batch_y in train_loader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
 
                 optimizer.zero_grad()
-                pred = model(batch_x)
-                loss = loss_fn(pred, batch_y)
-                loss.backward()
-                optimizer.step()
+
+                # AMP: forward pass con autocast
+                with autocast(enabled=use_amp):
+                    pred = model(batch_x)
+                    loss = loss_fn(pred, batch_y)
+
+                # AMP: backward pass con gradient scaling
+                scaler.scale(loss).backward()
+
+                # Gradient clipping: unscale prima, poi clip
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+                scaler.step(optimizer)
+                scaler.update()
+
+                running_loss += loss.item()
+
+            # TensorBoard: log training loss
+            avg_loss = running_loss / len(train_loader)
+            writer.add_scalar("Loss/train", avg_loss, epoch)
 
             # --- VALIDATION ---
             model.eval()
@@ -167,11 +195,18 @@ class OptunaOptimizer:
                 for batch_x, batch_y in val_loader:
                     batch_x = batch_x.to(self.device)
                     batch_y = batch_y.to(self.device)
-                    pred = model(batch_x)
+
+                    # AMP: validation con autocast per consistenza
+                    with autocast(enabled=use_amp):
+                        pred = model(batch_x)
                     running_mae += mae_fn(pred, batch_y).item()
 
             avg_mae = running_mae / len(val_loader)
             current_mase = avg_mae / baseline_mae
+
+            # TensorBoard: log validation metrics
+            writer.add_scalar("MASE/val", current_mase, epoch)
+            writer.add_scalar("MAE/val", avg_mae, epoch)
 
             # Update best
             if current_mase < best_mase:
@@ -184,11 +219,14 @@ class OptunaOptimizer:
             if trial is not None:
                 trial.report(current_mase, epoch)
                 if trial.should_prune():
+                    writer.close()  # Chiudi writer prima di uscire
                     raise optuna.TrialPruned()
 
             # Early stopping
             if epochs_no_improve >= patience:
                 break
+
+        writer.close()  # Chiudi writer alla fine del training
 
         return best_mase
 
