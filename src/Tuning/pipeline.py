@@ -39,7 +39,8 @@ def run_screening(
         "lstm",
         "dlinearm",
         "dlineari",
-    ]  # patchtst escluso per conflitti TensorFlow
+        "patchtst",
+    ]
     results = {}
 
     n_trials = 2 if dry_run else config["n_trials"]

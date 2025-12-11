@@ -1,5 +1,4 @@
 import torch.nn as nn
-from transformers import PatchTSTConfig, PatchTSTForPrediction
 from ..config import LOOKBACK, HORIZON
 
 
@@ -26,6 +25,9 @@ class PatchTST(nn.Module):
             model_config: Dizionario con i parametri del modello.
         """
         super().__init__()
+
+        # LAZY IMPORT: carica transformers solo quando serve
+        from transformers import PatchTSTConfig, PatchTSTForPrediction
 
         # Lettura parametri da config (non più da train_loader)
         self.num_channels = model_config.get("num_channels", 25)
