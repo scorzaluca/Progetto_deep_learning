@@ -3,15 +3,13 @@ OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi, obiettivi e pruning.
 """
 
-import os
-import json
-import copy
 import optuna
 from optuna.trial import Trial
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 import torch
 import torch.nn as nn
+from torch.cuda.amp import autocast, GradScaler
 
 from .hyperparameter_spaces import get_hyperparameter_space
 
@@ -44,53 +42,65 @@ class OptunaOptimizer:
         self.storage_path = storage_path
 
         # Importa config per baseline MASE
-        import sys
-
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-        from config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
+        from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
 
         self.naive_mae_per_fold = NAIVE_MAE_PER_FOLD
         self.lookback = LOOKBACK
         self.horizon = HORIZON
 
-    def _create_model(self, params: dict, train_loader):
+    def _create_model(self, params: dict):
         """
         Crea un'istanza del modello con i parametri specificati.
 
         Args:
             params: dizionario iperparametri
-            train_loader: DataLoader per rilevare input_size dinamicamente
 
         Returns:
             nn.Module: istanza del modello
         """
+        from ..config import INPUT_SIZE, TARGET_IDX
+
         if self.model_name == "lstm":
-            from ModelClasses import LSTM
+            from ..ModelClasses import LSTM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "hidden_size": params["hidden_size"],
                 "output_size": self.horizon,
                 "num_layers": params["num_layers"],
                 "dropout": params["dropout"],
                 "bidirectional": False,
-                "batch_first": True,
             }
-            return LSTM(model_config=model_config, train_loader=train_loader)
+            return LSTM(model_config=model_config)
 
-        elif self.model_name == "dlinear":
-            from ModelClasses import DLinear
+        elif self.model_name == "dlinearm":
+            from ..ModelClasses import DLinearM
 
             model_config = {
+                "input_size": INPUT_SIZE,
                 "lookback": self.lookback,
                 "horizon": self.horizon,
                 "kernel_size": params["kernel_size"],
             }
-            return DLinear(model_config=model_config, train_loader=train_loader)
+            return DLinearM(model_config=model_config)
 
-        elif self.model_name == "patchtst":
-            from ModelClasses import PatchTST
+        elif self.model_name == "dlineari":
+            from ..ModelClasses import DLinearI
 
             model_config = {
+                "target_idx": TARGET_IDX,
+                "lookback": self.lookback,
+                "horizon": self.horizon,
+                "kernel_size": params["kernel_size"],
+            }
+            return DLinearI(model_config=model_config)
+
+        elif self.model_name == "patchtst":
+            from ..ModelClasses import PatchTST
+
+            model_config = {
+                "num_channels": INPUT_SIZE,
+                "target_idx": TARGET_IDX,
                 "patch_length": params["patch_length"],
                 "stride": params["stride"],
                 "d_model": params["d_model"],
@@ -99,7 +109,7 @@ class OptunaOptimizer:
                 "dropout": params["dropout"],
                 "use_cls_token": False,
             }
-            return PatchTST(model_config=model_config, train_loader=train_loader)
+            return PatchTST(model_config=model_config)
         else:
             raise ValueError(f"Modello '{self.model_name}' non supportato")
 
@@ -114,7 +124,7 @@ class OptunaOptimizer:
     ) -> float:
         """
         Addestra il modello e ritorna il best MASE sul validation set.
-        Supporta pruning Optuna.
+        Supporta pruning Optuna e AMP (Automatic Mixed Precision).
 
         Args:
             model: modello da addestrare
@@ -127,7 +137,7 @@ class OptunaOptimizer:
         Returns:
             float: best MASE raggiunto
         """
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
         loss_fn = nn.MSELoss()
         mae_fn = nn.L1Loss()
 
@@ -136,21 +146,36 @@ class OptunaOptimizer:
         patience = self.config["patience"]
 
         best_mase = float("inf")
-        best_model_state = None
         epochs_no_improve = 0
+
+        # AMP: usa mixed precision solo su CUDA
+        use_amp = self.device.type == "cuda"
+        scaler = GradScaler(enabled=use_amp)
 
         for epoch in range(epochs):
             # --- TRAINING ---
             model.train()
+
             for batch_x, batch_y in train_loader:
                 batch_x = batch_x.to(self.device)
                 batch_y = batch_y.to(self.device)
 
                 optimizer.zero_grad()
-                pred = model(batch_x)
-                loss = loss_fn(pred, batch_y)
-                loss.backward()
-                optimizer.step()
+
+                # AMP: forward pass con autocast
+                with autocast(enabled=use_amp):
+                    pred = model(batch_x)
+                    loss = loss_fn(pred, batch_y)
+
+                # AMP: backward pass con gradient scaling
+                scaler.scale(loss).backward()
+
+                # Gradient clipping: unscale prima, poi clip
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+                scaler.step(optimizer)
+                scaler.update()
 
             # --- VALIDATION ---
             model.eval()
@@ -159,7 +184,10 @@ class OptunaOptimizer:
                 for batch_x, batch_y in val_loader:
                     batch_x = batch_x.to(self.device)
                     batch_y = batch_y.to(self.device)
-                    pred = model(batch_x)
+
+                    # AMP: validation con autocast per consistenza
+                    with autocast(enabled=use_amp):
+                        pred = model(batch_x)
                     running_mae += mae_fn(pred, batch_y).item()
 
             avg_mae = running_mae / len(val_loader)
@@ -168,7 +196,6 @@ class OptunaOptimizer:
             # Update best
             if current_mase < best_mase:
                 best_mase = current_mase
-                best_model_state = copy.deepcopy(model.state_dict())
                 epochs_no_improve = 0
             else:
                 epochs_no_improve += 1
@@ -212,10 +239,10 @@ class OptunaOptimizer:
         # 3. Addestra su ogni fold
         mase_scores = []
         for fold_idx in fold_indices:
-            train_loader, val_loader, scaler = self.folds[fold_idx]
+            train_loader, val_loader, _ = self.folds[fold_idx]
 
             # Crea modello
-            model = self._create_model(params, train_loader)
+            model = self._create_model(params)
             model.to(self.device)
 
             # Addestra e valuta

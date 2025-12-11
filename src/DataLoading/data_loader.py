@@ -2,18 +2,19 @@ from torch.utils.data import DataLoader
 import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import MinMaxScaler
-from Data_loading import PVForecastDataset
-from Utils import plot_cv_indices 
+from .sampler import PVForecastDataset
+from ..Utils import plot_cv_indices
 
-class TS_Cross_Validator():
+
+class TS_Cross_Validator:
     def __init__(self, df: pd.DataFrame, target_col: str, cfg_dict: dict):
         self.df = df
         self.target_col = target_col
-        self.lookback = cfg_dict.get('lookback', 48)
-        self.horizon = cfg_dict.get('horizon', 24)
-        self.batch_size = cfg_dict.get('batch_size', 64)
-        self.step = cfg_dict.get('step', 1)
-        self.n_splits = cfg_dict.get('n_splits', 3)
+        self.lookback = cfg_dict.get("lookback", 48)
+        self.horizon = cfg_dict.get("horizon", 24)
+        self.batch_size = cfg_dict.get("batch_size", 64)
+        self.step = cfg_dict.get("step", 1)
+        self.n_splits = cfg_dict.get("n_splits", 3)
 
         # 1. FIX IMPORTANTE: Inizializzalo qui!
         # Così puoi chiamare visualize_splits() SUBITO, senza aspettare il training.
@@ -35,55 +36,67 @@ class TS_Cross_Validator():
         train_df = self.df.iloc[train_indices]
         val_df = self.df.iloc[val_indices]
 
-        
-
-        # Dimension Control
-        if len(train_df) <= self.lookback + self.horizon:
-            print(f"Skipping fold {experiment_idx}: Train set troppo piccolo.")
-            return None, None, None
-
         # Scaling
         scaler = MinMaxScaler()
         train_scaled = scaler.fit_transform(train_df)
         val_scaled = scaler.transform(val_df)
 
-        train_scaled_df = pd.DataFrame(train_scaled, columns=train_df.columns, index=train_df.index)
-        val_scaled_df = pd.DataFrame(val_scaled, columns=val_df.columns, index=val_df.index)
+        train_scaled_df = pd.DataFrame(
+            train_scaled, columns=train_df.columns, index=train_df.index
+        )
+        val_scaled_df = pd.DataFrame(
+            val_scaled, columns=val_df.columns, index=val_df.index
+        )
 
-        last_train_samples = train_scaled_df.iloc[-self.lookback:]
+        last_train_samples = train_scaled_df.iloc[-self.lookback :]
         val_scaled_extended = pd.concat([last_train_samples, val_scaled_df], axis=0)
 
         # --- Logging ---
         print(f"\n---------------- FOLD {experiment_idx + 1} ----------------")
         print(f"TRAIN: {train_scaled_df.index[0]} -> {train_scaled_df.index[-1]}")
-        print(f"VAL  : {val_scaled_extended.index[0]} -> {val_scaled_extended.index[-1]}")
+        print(
+            f"VAL  : {val_scaled_extended.index[0]} -> {val_scaled_extended.index[-1]}"
+        )
 
         return train_scaled_df, val_scaled_extended, scaler
 
     def get_folds(self):
         # Usiamo lo splitter già pronto
         split_generator = self.tscv.split(self.df)
-        
+
         print(f"\n=== INIZIO CROSS-VALIDATION ({self.n_splits} splits) ===")
 
         for experiment_idx, (train_indices, val_indices) in enumerate(split_generator):
-            
-            splitting_result = self.split_and_normalize(train_indices, val_indices, experiment_idx)
+            splitting_result = self.split_and_normalize(
+                train_indices, val_indices, experiment_idx
+            )
 
             if splitting_result[0] is None:
                 continue
 
             train_scaled_df, val_scaled_extended, scaler = splitting_result
-            
+
             # Datasets
-            train_dataset = PVForecastDataset(train_scaled_df, self.target_col, self.lookback, self.horizon, self.step)
-            val_dataset = PVForecastDataset(val_scaled_extended, self.target_col, self.lookback, self.horizon, self.step)
+            train_dataset = PVForecastDataset(
+                train_scaled_df, self.target_col, self.lookback, self.horizon, self.step
+            )
+            val_dataset = PVForecastDataset(
+                val_scaled_extended,
+                self.target_col,
+                self.lookback,
+                self.horizon,
+                self.step,
+            )
 
             # DataLoaders
-            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
-            val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False)
+            train_loader = DataLoader(
+                train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True
+            )
+            val_loader = DataLoader(
+                val_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False
+            )
 
-            print(f"Fold {experiment_idx+1} pronto. Yielding...")
-            
+            print(f"Fold {experiment_idx + 1} pronto. Yielding...")
+
             # 2. FIX: Yield corretto (3 oggetti). Niente liste, niente append.
             yield train_loader, val_loader, scaler

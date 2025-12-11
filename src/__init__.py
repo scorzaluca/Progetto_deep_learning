@@ -5,7 +5,7 @@ from .DataLoading import PVForecastDataset, TS_Cross_Validator
 from .PreProcessing import Preprocesser, Uploader
 
 # 3. Importo dai modelli
-from .ModelClasses import NaivePersistence
+# from .ModelClasses import NaivePersistence
 
 
 
@@ -14,5 +14,5 @@ __all__ = [
     "TS_Cross_Validator",
     "Preprocesser",
     "Uploader",
-    "NaivePersistence",
+    # "NaivePersistence",
 ]
