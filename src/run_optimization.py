@@ -1,66 +1,113 @@
 """
 Script per l'ottimizzazione degli iperparametri con Optuna.
+Configurazione manuale in src/config/tuning_config.py.
+
+Uso:
+    python -m src.run_optimization
+
+Il flusso:
+1. Carica configurazione da tuning_config.py
+2. Crea/riprende studio Optuna
+3. Esegue ottimizzazione (media MASE sui fold)
+4. Salva best params in JSON
+5. Riaddestra su TUTTO il dataset con best params
+6. Salva checkpoint .pth
 """
 
-import random
-import numpy as np
+import os
 import torch
 import pandas as pd
+
 from .config import (
     TARGET_COL,
-    SAMPLING_CONFIG,
-    SCREENING_CONFIG,
-    INTENSIVE_CONFIG,
     SEED,
+    # Tuning config
+    MODEL_NAME,
+    N_TRIALS,
+    N_FOLDS,
+    TUNING_EPOCHS,
+    PATIENCE,
+    STUDY_NAME,
+    NEW_STUDY,
+    RESULTS_DIR,
 )
-from .DataLoading import TS_Cross_Validator
-from .Tuning import run_screening, run_intensive
-
-# Modalita: "screening" o "intensive"
-MODE = "screening"
-
-# Modello per intensive (usato solo se MODE = "intensive")
-MODEL_INTENSIVE = "lstm"
-
-DATA_PATH = "data/processed/preprocessed_ds.csv"
-RESULTS_DIR = "/results/"
+from .Tuning import OptunaOptimizer
+from .Utils import set_seed, get_device, load_data_and_folds, save_results
 
 
-def set_seed(seed: int):
-    """Imposta il seed per riproducibilita."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, device):
+    """
+    Riaddestra il modello con i best params su TUTTO il dataset.
+    Salva il checkpoint in results/checkpoints/.
 
+    Args:
+        model_name: nome del modello
+        best_params: iperparametri ottimali
+        df: DataFrame con tutti i dati
+        device: torch device
 
-def get_device():
-    """Rileva automaticamente GPU (CUDA) o fallback a CPU."""
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        gpu_name = torch.cuda.get_device_name(0)
-        print(f"GPU rilevata: {gpu_name}")
-    else:
-        device = torch.device("cpu")
-        print("GPU non disponibile, usando CPU")
-    return device
+    Returns:
+        str: percorso del checkpoint salvato
+    """
+    from .Training.engine import create_model
+    from .DataLoading import create_full_dataloader
 
+    print("\n" + "=" * 60)
+    print("RETRAINING FINALE SU TUTTO IL DATASET")
+    print("=" * 60)
 
-def load_data_and_folds():
-    """Carica il dataset e crea i fold per la cross-validation."""
-    print(f"Caricamento dataset: {DATA_PATH}")
-    df = pd.read_csv(DATA_PATH)
-    print(f"Shape: {df.shape}")
+    # Crea DataLoader con TUTTI i dati (no split)
+    train_loader = create_full_dataloader(df, target_col=TARGET_COL)
 
-    validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
-    folds = list(validator.get_folds())  # Converti generatore in lista
-    print(f"Fold creati: {len(folds)}")
+    # Crea modello
+    model = create_model(model_name, best_params)
+    model.to(device)
 
-    return folds
+    # Training senza validation (solo forward su train)
+    lr = best_params.get("lr", 0.001)
+    grad_clip_norm = best_params.get("grad_clip_norm", 1.0)
+
+    print(f"Training {model_name.upper()} con {TUNING_EPOCHS} epoche...")
+
+    # Training loop semplificato (senza early stopping, no validation)
+    import torch.nn as nn
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.MSELoss()
+
+    model.train()
+    for epoch in range(TUNING_EPOCHS):
+        running_loss = 0.0
+        for batch_x, batch_y in train_loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+
+            optimizer.zero_grad()
+            prediction = model(batch_x)
+            loss = loss_fn(prediction, batch_y)
+            loss.backward()
+
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=grad_clip_norm
+                )
+
+            optimizer.step()
+            running_loss += loss.item()
+
+        avg_loss = running_loss / len(train_loader)
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            print(f"  Epoch {epoch + 1}/{TUNING_EPOCHS} - Train MSE: {avg_loss:.6f}")
+
+    # Salva checkpoint
+    checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, f"{STUDY_NAME}.pth")
+
+    torch.save(model.state_dict(), checkpoint_path)
+    print(f"\nCheckpoint salvato: {checkpoint_path}")
+
+    return checkpoint_path
 
 
 def main():
@@ -68,62 +115,68 @@ def main():
     print("\n" + "=" * 60)
     print("OPTUNA HYPERPARAMETER OPTIMIZATION")
     print("=" * 60)
-    print(f"Modalita: {MODE.upper()}")
-    if MODE == "intensive":
-        print(f"Modello: {MODEL_INTENSIVE.upper()}")
+    print(f"Modello: {MODEL_NAME.upper()}")
+    print(f"Studio: {STUDY_NAME} ({'NUOVO' if NEW_STUDY else 'RIPRENDE'})")
+    print(f"Trials: {N_TRIALS}, Folds: {N_FOLDS}, Epochs: {TUNING_EPOCHS}")
     print("=" * 60 + "\n")
 
     set_seed(SEED)
     device = get_device()
-    folds = load_data_and_folds()
+    df, folds = load_data_and_folds()
 
-    if MODE == "screening":
-        results = run_screening(
-            folds=folds,
-            device=device,
-            config=SCREENING_CONFIG,
-            results_dir=RESULTS_DIR,
-        )
+    # Crea directory risultati
+    os.makedirs(RESULTS_DIR, exist_ok=True)
 
-        print("\n" + "=" * 60)
-        print("RIEPILOGO SCREENING")
-        print("=" * 60)
-        for model in ["lstm", "dlineari", "dlinearm", "patchtst", "tcn"]:
-            if model in results:
-                mase = results[model].get("best_mase", "N/A")
-                if isinstance(mase, float):
-                    print(f"{model.upper()}: MASE = {mase:.4f}")
-                else:
-                    print(f"{model.upper()}: {mase}")
+    # Configura quale fold usare
+    config = {
+        "n_trials": N_TRIALS,
+        "n_folds": N_FOLDS,
+        "epochs": TUNING_EPOCHS,
+        "patience": PATIENCE,
+    }
 
-        ranking = results.get("ranking", [])
-        if ranking:
-            print(f"\nRanking: {' > '.join(ranking)}")
+    # Storage SQLite per persistenza
+    storage_path = os.path.join(RESULTS_DIR, "optuna_studies.db")
 
-        print(f"\nRisultati salvati in: {RESULTS_DIR}screening_results.json")
-        print("\nProssimo passo:")
-        print(f'Modifica MODEL_INTENSIVE = "{ranking[0] if ranking else "lstm"}"')
-        print('Modifica MODE = "intensive"')
-        print("Riesegui lo script")
+    # Crea optimizer
+    optimizer = OptunaOptimizer(
+        model_name=MODEL_NAME,
+        folds=folds,
+        device=device,
+        config=config,
+        storage_path=storage_path,
+        verbose=False,
+    )
 
-    elif MODE == "intensive":
-        results = run_intensive(
-            model_name=MODEL_INTENSIVE,
-            folds=folds,
-            device=device,
-            config=INTENSIVE_CONFIG,
-            results_dir=RESULTS_DIR,
-        )
+    # Esegui ottimizzazione
+    result = optimizer.optimize(
+        study_name=STUDY_NAME,
+        n_trials=N_TRIALS,
+        new_study=NEW_STUDY,
+    )
 
-        print("\n" + "=" * 60)
-        print(f"RIEPILOGO INTENSIVE - {MODEL_INTENSIVE.upper()}")
-        print("=" * 60)
-        print(f"Best MASE: {results['best_mase']:.4f}")
-        print(f"Best params: {results['best_params']}")
-        print(f"Checkpoint: {results['checkpoint_path']}")
+    print("\n" + "=" * 60)
+    print("OTTIMIZZAZIONE COMPLETATA")
+    print("=" * 60)
+    print(f"Best MASE: {result['best_mase']:.4f}")
+    print(f"Best params: {result['best_params']}")
 
-    else:
-        print(f"Modalita '{MODE}' non valida. Usa 'screening' o 'intensive'.")
+    # Salva risultati
+    save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"])
+
+    # Retraining finale su tutto il dataset
+    checkpoint_path = train_final_model(MODEL_NAME, result["best_params"], df, device)
+
+    print("\n" + "=" * 60)
+    print("RIEPILOGO FINALE")
+    print("=" * 60)
+    print(f"Modello: {MODEL_NAME.upper()}")
+    print(f"Studio: {STUDY_NAME}")
+    print(f"Best MASE (validazione): {result['best_mase']:.4f}")
+    print(f"Checkpoint: {checkpoint_path}")
+    print("\nPer recuperare lo studio:")
+    print(f'  optuna.load_study("{STUDY_NAME}", storage="sqlite:///{storage_path}")')
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

@@ -115,13 +115,16 @@ class OptunaOptimizer:
 
         return sum(mase_scores) / len(mase_scores)
 
-    def optimize(self, study_name: str, n_trials: int = None) -> dict:
+    def optimize(
+        self, study_name: str, n_trials: int = None, new_study: bool = True
+    ) -> dict:
         """
         Esegue l'ottimizzazione.
 
         Args:
             study_name: nome dello studio Optuna
             n_trials: numero di trial (default da config)
+            new_study: se True, crea nuovo studio. Se False, riprende esistente.
 
         Returns:
             dict: {
@@ -133,27 +136,52 @@ class OptunaOptimizer:
         if n_trials is None:
             n_trials = self.config["n_trials"]
 
-        # Crea o carica studio
+        # Storage SQLite per persistenza
         storage = f"sqlite:///{self.storage_path}" if self.storage_path else None
+
+        # Gestione nuovo studio vs ripresa
+        if new_study and storage:
+            # Elimina studio esistente se presente
+            try:
+                optuna.delete_study(study_name=study_name, storage=storage)
+                print(f"Studio '{study_name}' esistente eliminato.")
+            except KeyError:
+                pass  # Studio non esiste, ok
 
         study = optuna.create_study(
             study_name=study_name,
             storage=storage,
-            load_if_exists=True,
+            load_if_exists=not new_study,  # Carica se non è nuovo
             direction="minimize",
             sampler=TPESampler(seed=SEED),
             pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=5),
         )
 
+        # Calcola trials rimanenti se si riprende
+        completed_trials = len(study.trials)
+        remaining_trials = max(0, n_trials - completed_trials)
+
         print(f"\n{'=' * 60}")
         print(f"Ottimizzazione: {self.model_name.upper()}")
+        print(f"Studio: {study_name}")
+        if completed_trials > 0:
+            print(
+                f"Trial completati: {completed_trials}, Rimanenti: {remaining_trials}"
+            )
+        else:
+            print(f"Trial totali: {n_trials}")
         print(
-            f"Trial: {n_trials}, Fold: {self.config['n_folds']}, "
+            f"Fold: {self.config['n_folds']}, "
             f"Epochs: {self.config['epochs']}, Patience: {self.config['patience']}"
         )
         print(f"{'=' * 60}\n")
 
-        study.optimize(self._objective, n_trials=n_trials, show_progress_bar=True)
+        if remaining_trials > 0:
+            study.optimize(
+                self._objective, n_trials=remaining_trials, show_progress_bar=True
+            )
+        else:
+            print("Tutti i trial già completati. Nessuna ottimizzazione necessaria.")
 
         return {
             "best_params": study.best_params,

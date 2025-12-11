@@ -100,3 +100,44 @@ class TS_Cross_Validator:
 
             # 2. FIX: Yield corretto (3 oggetti). Niente liste, niente append.
             yield train_loader, val_loader, scaler
+
+
+def create_full_dataloader(
+    df: pd.DataFrame,
+    target_col: str,
+    lookback: int = 48,
+    horizon: int = 24,
+    batch_size: int = 64,
+    step: int = 1,
+) -> DataLoader:
+    """
+    Crea un DataLoader con TUTTI i dati (per retraining finale).
+    Applica MinMaxScaler su tutto il dataset.
+
+    Args:
+        df: DataFrame con i dati
+        target_col: nome colonna target
+        lookback: finestra di input
+        horizon: finestra di output
+        batch_size: dimensione batch
+        step: passo tra campioni
+
+    Returns:
+        DataLoader con tutti i dati normalizzati
+    """
+    # Normalizza tutto il dataset
+    scaler = MinMaxScaler()
+    scaled_data = scaler.fit_transform(df)
+    scaled_df = pd.DataFrame(scaled_data, columns=df.columns, index=df.index)
+
+    # Crea dataset
+    dataset = PVForecastDataset(scaled_df, target_col, lookback, horizon, step)
+
+    # Crea DataLoader
+    dataloader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=True, drop_last=True
+    )
+
+    print(f"Full DataLoader creato: {len(dataset)} campioni, {len(dataloader)} batch")
+
+    return dataloader

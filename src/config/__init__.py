@@ -21,9 +21,18 @@ from .training_config import (
     EPOCHS,
     LEARNING_RATE,
     NAIVE_MAE_PER_FOLD,
+)
+
+from .tuning_config import (
+    MODEL_NAME,
+    N_TRIALS,
+    N_FOLDS,
+    EPOCHS as TUNING_EPOCHS,
+    PATIENCE,
+    STUDY_NAME,
+    NEW_STUDY,
+    DATA_PATH,
     RESULTS_DIR,
-    SCREENING_CONFIG,
-    INTENSIVE_CONFIG,
 )
 
 __all__ = [
@@ -44,7 +53,14 @@ __all__ = [
     "EPOCHS",
     "LEARNING_RATE",
     "NAIVE_MAE_PER_FOLD",
+    # Tuning config
+    "MODEL_NAME",
+    "N_TRIALS",
+    "N_FOLDS",
+    "TUNING_EPOCHS",
+    "PATIENCE",
+    "STUDY_NAME",
+    "NEW_STUDY",
+    "DATA_PATH",
     "RESULTS_DIR",
-    "SCREENING_CONFIG",
-    "INTENSIVE_CONFIG",
 ]
