@@ -18,8 +18,8 @@ from config import (
     RESULTS_DIR,
 )
 from DataLoading import TS_Cross_Validator
-from Training.engine import fit_model
-from Training.evaluation import evaluate_model
+from Training import fit_model
+from Training import evaluate_model
 from ModelClasses import PatchTST, LSTM, DLinear
 
 SEED = 42

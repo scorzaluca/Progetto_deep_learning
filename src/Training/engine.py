@@ -89,7 +89,7 @@ def fit_model(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
 
-    baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
+    baseline_mae = config.NAIVE_MAE_PER_FOLD[fold_idx]
 
     history = {
         "train_loss": [],
