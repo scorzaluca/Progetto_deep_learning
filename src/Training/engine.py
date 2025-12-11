@@ -9,6 +9,7 @@ import math
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torch.amp import autocast, GradScaler  # AMP per mixed precision
 import optuna
 from ..config import NAIVE_MAE_PER_FOLD, INPUT_SIZE, TARGET_IDX, LOOKBACK, HORIZON
 
@@ -112,9 +113,11 @@ def train_one_epoch(
     loss_fn,
     device,
     grad_clip_norm: float = None,
+    scaler: GradScaler = None,
 ):
     """
     Esegue un'epoca di addestramento (Forward + Backward).
+    Supporta AMP (Automatic Mixed Precision) se viene passato uno scaler.
 
     Args:
         model: Modello PyTorch.
@@ -123,27 +126,43 @@ def train_one_epoch(
         loss_fn: Loss function.
         device: Device (cuda/cpu).
         grad_clip_norm: Se specificato, applica gradient clipping con questa norma.
+        scaler: GradScaler per AMP (opzionale).
 
     Returns:
         float: Loss media dell'epoca.
     """
     model.train()
     running_loss = 0.0
+    use_amp = scaler is not None
 
     for batch_x, batch_y in dataloader:
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
         optimizer.zero_grad()
 
-        prediction = model(batch_x)
-        loss = loss_fn(prediction, batch_y)
-        loss.backward()
+        # AMP: forward con autocast
+        with autocast(device_type="cuda", enabled=use_amp):
+            prediction = model(batch_x)
+            loss = loss_fn(prediction, batch_y)
 
-        # Gradient clipping per stabilità (utile per LSTM/Transformer)
-        if grad_clip_norm is not None:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
-
-        optimizer.step()
+        if use_amp:
+            # AMP: backward con scaling
+            scaler.scale(loss).backward()
+            if grad_clip_norm is not None:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=grad_clip_norm
+                )
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            # Standard backward
+            loss.backward()
+            if grad_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=grad_clip_norm
+                )
+            optimizer.step()
 
         running_loss += loss.item()
 
@@ -236,15 +255,19 @@ def fit_model(
             - history: Dizionario con le metriche per ogni epoca.
             - best_epoch: Epoca con la migliore validation loss.
     """
-    # Default optimizer e loss
+    # Default optimizer e loss - AdamW con weight decay per regolarizzazione
     if optimizer_cls is None:
-        optimizer_cls = torch.optim.Adam
+        optimizer_cls = torch.optim.AdamW
     if optimizer_kwargs is None:
-        optimizer_kwargs = {}
+        optimizer_kwargs = {"weight_decay": 0.01}
     if loss_fn is None:
         loss_fn = nn.MSELoss()
 
     optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
+
+    # AMP: crea scaler solo se su CUDA
+    use_amp = device.type == "cuda"
+    scaler = GradScaler(enabled=use_amp) if use_amp else None
 
     baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
 
@@ -266,7 +289,7 @@ def fit_model(
     for epoch in range(epochs):
         # --- TRAINING ---
         train_loss = train_one_epoch(
-            model, train_loader, optimizer, loss_fn, device, grad_clip_norm
+            model, train_loader, optimizer, loss_fn, device, grad_clip_norm, scaler
         )
 
         # --- VALIDATION ---

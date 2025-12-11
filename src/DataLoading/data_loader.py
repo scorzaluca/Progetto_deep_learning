@@ -1,3 +1,4 @@
+import torch
 from torch.utils.data import DataLoader
 import pandas as pd
 from sklearn.model_selection import TimeSeriesSplit
@@ -88,12 +89,23 @@ class TS_Cross_Validator:
                 self.step,
             )
 
-            # DataLoaders
+            # DataLoaders con pin_memory per GPU speedup
+            use_pin_memory = torch.cuda.is_available()
             train_loader = DataLoader(
-                train_dataset, batch_size=self.batch_size, shuffle=True, drop_last=True
+                train_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                drop_last=True,
+                pin_memory=use_pin_memory,
+                num_workers=0,
             )
             val_loader = DataLoader(
-                val_dataset, batch_size=self.batch_size, shuffle=False, drop_last=False
+                val_dataset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                drop_last=False,
+                pin_memory=use_pin_memory,
+                num_workers=0,
             )
 
             print(f"Fold {experiment_idx + 1} pronto. Yielding...")
