@@ -21,6 +21,7 @@ from .training_config import (
     EPOCHS,
     LEARNING_RATE,
     NAIVE_MAE_PER_FOLD,
+    NAIVE_MAE_FINAL_FOLD,
 )
 
 from .tuning_config import (
@@ -53,6 +54,7 @@ __all__ = [
     "EPOCHS",
     "LEARNING_RATE",
     "NAIVE_MAE_PER_FOLD",
+    "NAIVE_MAE_FINAL_FOLD",
     # Tuning config
     "MODEL_NAME",
     "N_TRIALS",

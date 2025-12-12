@@ -220,7 +220,7 @@ def fit_model(
     epochs,
     lr,
     device,
-    fold_idx,
+    fold_idx=None,
     patience=10,
     trial=None,
     optimizer_cls=None,
@@ -228,6 +228,7 @@ def fit_model(
     loss_fn=None,
     grad_clip_norm=1.0,
     verbose=True,
+    baseline_mae=None,
 ):
     """
     Ciclo principale di addestramento con Early Stopping.
@@ -240,7 +241,7 @@ def fit_model(
         epochs: Numero massimo di epoche.
         lr: Learning rate.
         device: Device (cuda o cpu).
-        fold_idx: Indice del fold corrente (per calcolare MASE).
+        fold_idx: Indice del fold corrente (per calcolare MASE). Ignorato se baseline_mae è fornito.
         patience: Numero di epoche senza miglioramento prima dell'early stopping.
         trial: Oggetto optuna.Trial per pruning/reporting (opzionale).
         optimizer_cls: Classe optimizer (default: torch.optim.Adam).
@@ -248,12 +249,13 @@ def fit_model(
         loss_fn: Loss function (default: nn.MSELoss()).
         grad_clip_norm: Norma massima per gradient clipping (None per disabilitare).
         verbose: Se True, stampa progress durante il training.
+        baseline_mae: MAE del modello naive per calcolare MASE. Se None, usa NAIVE_MAE_PER_FOLD[fold_idx].
 
     Returns:
         tuple: (model, history, best_epoch)
             - model: Modello addestrato con i pesi migliori.
             - history: Dizionario con le metriche per ogni epoca.
-            - best_epoch: Epoca con la migliore validation loss.
+            - best_epoch: Epoca con il miglior MASE.
     """
     # Default optimizer e loss - AdamW con weight decay per regolarizzazione
     if optimizer_cls is None:
@@ -269,7 +271,11 @@ def fit_model(
     use_amp = device.type == "cuda"
     scaler = GradScaler(enabled=use_amp) if use_amp else None
 
-    baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
+    # Usa baseline_mae passato direttamente, altrimenti prendi dalla lista per fold_idx
+    if baseline_mae is None:
+        if fold_idx is None:
+            raise ValueError("Devi fornire baseline_mae o fold_idx per calcolare MASE")
+        baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
 
     history = {
         "train_loss": [],

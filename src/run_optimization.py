@@ -30,6 +30,8 @@ from .config import (
     STUDY_NAME,
     NEW_STUDY,
     RESULTS_DIR,
+    # Training config
+    NAIVE_MAE_FINAL_FOLD,
 )
 from .Tuning import OptunaOptimizer
 from .Utils import set_seed, get_device, load_data_and_folds, save_results
@@ -73,6 +75,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     print(f"Training {model_name.upper()} con early stopping (patience={PATIENCE})...")
 
     # Usa fit_model con early stopping (stessa logica dell'ottimizzazione)
+    # Passa baseline_mae direttamente invece di fold_idx per il final training
     model, history, best_mase = fit_model(
         model=model,
         train_loader=train_loader,
@@ -80,11 +83,12 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         epochs=TUNING_EPOCHS,
         lr=lr,
         device=device,
-        fold_idx=None,  # Non è un fold, è il training finale
+        fold_idx=None,  # Non è un fold, usa baseline_mae
         patience=PATIENCE,
         trial=None,  # Nessun pruning Optuna
         grad_clip_norm=grad_clip_norm,
         verbose=True,  # Verbose per vedere il progresso
+        baseline_mae=NAIVE_MAE_FINAL_FOLD,  # MAE naive per calcolo MASE
     )
 
     # Salva checkpoint
