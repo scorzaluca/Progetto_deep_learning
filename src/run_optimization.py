@@ -37,7 +37,8 @@ from .Utils import set_seed, get_device, load_data_and_folds, save_results
 
 def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, device):
     """
-    Riaddestra il modello con i best params su TUTTO il dataset.
+    Riaddestra il modello con i best params su 22 mesi (train) + 2 mesi (val).
+    Usa early stopping per evitare overfitting/underfitting.
     Salva il checkpoint in results/checkpoints/.
 
     Args:
@@ -49,55 +50,42 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     Returns:
         str: percorso del checkpoint salvato
     """
-    from .Training.engine import create_model
-    from .DataLoading import create_full_dataloader
+    from .Training.engine import create_model, fit_model
+    from .DataLoading import create_final_train_val_loaders
 
     print("\n" + "=" * 60)
-    print("RETRAINING FINALE SU TUTTO IL DATASET")
+    print("RETRAINING FINALE (22 mesi train + 2 mesi val)")
     print("=" * 60)
 
-    # Crea DataLoader con TUTTI i dati (no split)
-    train_loader = create_full_dataloader(df, target_col=TARGET_COL)
+    # Crea train/val loaders (22 mesi train, 2 mesi val con early stopping)
+    train_loader, val_loader, scaler = create_final_train_val_loaders(
+        df, target_col=TARGET_COL
+    )
 
     # Crea modello
     model = create_model(model_name, best_params)
     model.to(device)
 
-    # Training senza validation (solo forward su train)
+    # Estrai parametri
     lr = best_params.get("lr", 0.001)
     grad_clip_norm = best_params.get("grad_clip_norm", 1.0)
 
-    print(f"Training {model_name.upper()} con {TUNING_EPOCHS} epoche...")
+    print(f"Training {model_name.upper()} con early stopping (patience={PATIENCE})...")
 
-    # Training loop semplificato (senza early stopping, no validation)
-    import torch.nn as nn
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    loss_fn = nn.MSELoss()
-
-    model.train()
-    for epoch in range(TUNING_EPOCHS):
-        running_loss = 0.0
-        for batch_x, batch_y in train_loader:
-            batch_x = batch_x.to(device)
-            batch_y = batch_y.to(device)
-
-            optimizer.zero_grad()
-            prediction = model(batch_x)
-            loss = loss_fn(prediction, batch_y)
-            loss.backward()
-
-            if grad_clip_norm is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), max_norm=grad_clip_norm
-                )
-
-            optimizer.step()
-            running_loss += loss.item()
-
-        avg_loss = running_loss / len(train_loader)
-        if (epoch + 1) % 10 == 0 or epoch == 0:
-            print(f"  Epoch {epoch + 1}/{TUNING_EPOCHS} - Train MSE: {avg_loss:.6f}")
+    # Usa fit_model con early stopping (stessa logica dell'ottimizzazione)
+    model, history, best_mase = fit_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=TUNING_EPOCHS,
+        lr=lr,
+        device=device,
+        fold_idx=None,  # Non è un fold, è il training finale
+        patience=PATIENCE,
+        trial=None,  # Nessun pruning Optuna
+        grad_clip_norm=grad_clip_norm,
+        verbose=True,  # Verbose per vedere il progresso
+    )
 
     # Salva checkpoint
     checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
@@ -106,6 +94,8 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
 
     torch.save(model.state_dict(), checkpoint_path)
     print(f"\nCheckpoint salvato: {checkpoint_path}")
+    print(f"Best MASE su validation finale: {best_mase:.4f}")
+    print(f"Epoche effettive: {len(history['train_loss'])}")
 
     return checkpoint_path
 

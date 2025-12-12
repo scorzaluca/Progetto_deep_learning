@@ -39,8 +39,11 @@ class Preprocesser:
         self.df["day_sin"] = np.sin(2 * np.pi * day_fraction)
         self.df["day_cos"] = np.cos(2 * np.pi * day_fraction)
 
-        # Ciclo annuale
-        year_fraction = self.df[self.date_col].dt.dayofyear / 365.0
+        # Ciclo annuale (gestisce anni bisestili)
+        days_in_year = self.df[self.date_col].dt.is_leap_year.map(
+            {True: 366, False: 365}
+        )
+        year_fraction = self.df[self.date_col].dt.dayofyear / days_in_year
         self.df["year_sin"] = np.sin(2 * np.pi * year_fraction)
         self.df["year_cos"] = np.cos(2 * np.pi * year_fraction)
 

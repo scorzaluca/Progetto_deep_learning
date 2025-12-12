@@ -45,6 +45,11 @@ class OptunaOptimizer:
         self.storage_path = storage_path
         self.verbose = verbose
 
+        # Pre-calcola i pesi dei fold (basati sul numero di campioni di training)
+        self.train_sample_counts = [len(fold[0].dataset) for fold in folds]
+        total_samples = sum(self.train_sample_counts)
+        self.fold_weights = [n / total_samples for n in self.train_sample_counts]
+
     def _create_model(self, params: dict):
         """
         Crea un'istanza del modello con i parametri specificati.
@@ -61,13 +66,14 @@ class OptunaOptimizer:
     def _objective(self, trial: Trial) -> float:
         """
         Funzione obiettivo per Optuna.
-        Addestra il modello sui fold specificati e ritorna la media MASE.
+        Addestra il modello sui fold specificati e ritorna la media ponderata MASE.
+        I pesi sono proporzionali al numero di campioni di training per fold.
 
         Args:
             trial: oggetto Optuna Trial
 
         Returns:
-            float: media MASE sui fold
+            float: media ponderata MASE sui fold
         """
         # 1. Genera iperparametri
         params = get_hyperparameter_space(self.model_name, trial)
@@ -85,8 +91,9 @@ class OptunaOptimizer:
             # Fase intensive: usa tutti i fold
             fold_indices = list(range(len(self.folds)))
 
-        # 3. Addestra su ogni fold
+        # 3. Addestra su ogni fold e raccogli risultati
         mase_scores = []
+
         for fold_idx in fold_indices:
             train_loader, val_loader, _ = self.folds[fold_idx]
 
@@ -113,7 +120,15 @@ class OptunaOptimizer:
             best_mase = min(history["val_mase"])
             mase_scores.append(best_mase)
 
-        return sum(mase_scores) / len(mase_scores)
+        # 4. Calcola media ponderata MASE (usa pesi pre-calcolati)
+        weights_to_use = [self.fold_weights[i] for i in fold_indices]
+        # Normalizza i pesi se non si usano tutti i fold
+        weight_sum = sum(weights_to_use)
+        weighted_mase = sum(
+            (w / weight_sum) * mase for w, mase in zip(weights_to_use, mase_scores)
+        )
+
+        return weighted_mase
 
     def optimize(
         self, study_name: str, n_trials: int = None, new_study: bool = True
@@ -173,6 +188,11 @@ class OptunaOptimizer:
         print(
             f"Fold: {self.config['n_folds']}, "
             f"Epochs: {self.config['epochs']}, Patience: {self.config['patience']}"
+        )
+
+        # Stampa i pesi dei fold (pre-calcolati nel costruttore)
+        print(
+            f"Fold weights: {[f'{w:.3f}' for w in self.fold_weights]} (samples: {self.train_sample_counts})"
         )
         print(f"{'=' * 60}\n")
 
