@@ -10,7 +10,7 @@ from datetime import datetime
 
 from config import TARGET_COL, SAMPLING_CONFIG, NAIVE_MAE_PER_FOLD, RESULTS_DIR
 from DataLoading import TS_Cross_Validator
-from ModelClasses import ChronosWrapper
+from ModelClasses import ChronosWrapper, LagLlamaWrapper
 
 # Configurazione
 FOLD_INDEX = 2  # Stesso fold dello screening (il più grande)
@@ -19,6 +19,7 @@ DATA_PATH = "data/processed/adjusted_ds.csv"
 # Modelli zero-shot da valutare
 MODELS_TO_EVALUATE = {
     "chronos-2": ChronosWrapper,
+    "lag-llama": LagLlamaWrapper,
     # Aggiungi altri modelli zero-shot qui in futuro
     # "timegpt": TimeGPTWrapper,
 }
