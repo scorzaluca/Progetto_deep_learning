@@ -1,6 +1,7 @@
 """
 OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi, obiettivi e pruning.
+Utilizza fit_model da engine.py per evitare duplicazione di logica.
 """
 
 import optuna
@@ -8,10 +9,10 @@ from optuna.trial import Trial
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 import torch
-import torch.nn as nn
-from torch.cuda.amp import autocast, GradScaler
 
 from .hyperparameter_spaces import get_hyperparameter_space
+from ..Training.engine import fit_model, create_model
+from ..config import SEED
 
 
 class OptunaOptimizer:
@@ -26,31 +27,33 @@ class OptunaOptimizer:
         device: torch.device,
         config: dict,
         storage_path: str = None,
+        verbose: bool = False,
     ):
         """
         Args:
-            model_name: nome del modello ("lstm", "dlinear", "patchtst")
+            model_name: nome del modello ("lstm", "dlinearm", "dlineari", "patchtst", "tcn")
             folds: lista di tuple (train_loader, val_loader, scaler)
             device: torch device (cuda/cpu)
             config: dizionario con n_trials, n_folds, patience, epochs
             storage_path: percorso del database SQLite per persistenza
+            verbose: se True, stampa messaggi di debug
         """
         self.model_name = model_name.lower()
         self.folds = folds
         self.device = device
         self.config = config
         self.storage_path = storage_path
+        self.verbose = verbose
 
-        # Importa config per baseline MASE
-        from ..config import NAIVE_MAE_PER_FOLD, LOOKBACK, HORIZON
-
-        self.naive_mae_per_fold = NAIVE_MAE_PER_FOLD
-        self.lookback = LOOKBACK
-        self.horizon = HORIZON
+        # Pre-calcola i pesi dei fold (basati sul numero di campioni di training)
+        self.train_sample_counts = [len(fold[0].dataset) for fold in folds]
+        total_samples = sum(self.train_sample_counts)
+        self.fold_weights = [n / total_samples for n in self.train_sample_counts]
 
     def _create_model(self, params: dict):
         """
         Crea un'istanza del modello con i parametri specificati.
+        Utilizza la factory function create_model() da engine.py.
 
         Args:
             params: dizionario iperparametri
@@ -58,174 +61,26 @@ class OptunaOptimizer:
         Returns:
             nn.Module: istanza del modello
         """
-        from ..config import INPUT_SIZE, TARGET_IDX
-
-        if self.model_name == "lstm":
-            from ..ModelClasses import LSTM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "hidden_size": params["hidden_size"],
-                "output_size": self.horizon,
-                "num_layers": params["num_layers"],
-                "dropout": params["dropout"],
-                "bidirectional": False,
-            }
-            return LSTM(model_config=model_config)
-
-        elif self.model_name == "dlinearm":
-            from ..ModelClasses import DLinearM
-
-            model_config = {
-                "input_size": INPUT_SIZE,
-                "lookback": self.lookback,
-                "horizon": self.horizon,
-                "kernel_size": params["kernel_size"],
-            }
-            return DLinearM(model_config=model_config)
-
-        elif self.model_name == "dlineari":
-            from ..ModelClasses import DLinearI
-
-            model_config = {
-                "target_idx": TARGET_IDX,
-                "lookback": self.lookback,
-                "horizon": self.horizon,
-                "kernel_size": params["kernel_size"],
-            }
-            return DLinearI(model_config=model_config)
-
-        elif self.model_name == "patchtst":
-            from ..ModelClasses import PatchTST
-
-            model_config = {
-                "num_channels": INPUT_SIZE,
-                "target_idx": TARGET_IDX,
-                "patch_length": params["patch_length"],
-                "stride": params["stride"],
-                "d_model": params["d_model"],
-                "n_heads": params["n_heads"],
-                "n_layers": params["n_layers"],
-                "dropout": params["dropout"],
-                "use_cls_token": False,
-            }
-            return PatchTST(model_config=model_config)
-        else:
-            raise ValueError(f"Modello '{self.model_name}' non supportato")
-
-    def _train_and_evaluate(
-        self,
-        model: nn.Module,
-        train_loader,
-        val_loader,
-        lr: float,
-        fold_idx: int,
-        trial: Trial = None,
-    ) -> float:
-        """
-        Addestra il modello e ritorna il best MASE sul validation set.
-        Supporta pruning Optuna e AMP (Automatic Mixed Precision).
-
-        Args:
-            model: modello da addestrare
-            train_loader: DataLoader training
-            val_loader: DataLoader validation
-            lr: learning rate
-            fold_idx: indice del fold (per baseline MASE)
-            trial: oggetto Trial per reporting/pruning
-
-        Returns:
-            float: best MASE raggiunto
-        """
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
-        loss_fn = nn.MSELoss()
-        mae_fn = nn.L1Loss()
-
-        baseline_mae = self.naive_mae_per_fold[fold_idx]
-        epochs = self.config["epochs"]
-        patience = self.config["patience"]
-
-        best_mase = float("inf")
-        epochs_no_improve = 0
-
-        # AMP: usa mixed precision solo su CUDA
-        use_amp = self.device.type == "cuda"
-        scaler = GradScaler(enabled=use_amp)
-
-        for epoch in range(epochs):
-            # --- TRAINING ---
-            model.train()
-
-            for batch_x, batch_y in train_loader:
-                batch_x = batch_x.to(self.device)
-                batch_y = batch_y.to(self.device)
-
-                optimizer.zero_grad()
-
-                # AMP: forward pass con autocast
-                with autocast(enabled=use_amp):
-                    pred = model(batch_x)
-                    loss = loss_fn(pred, batch_y)
-
-                # AMP: backward pass con gradient scaling
-                scaler.scale(loss).backward()
-
-                # Gradient clipping: unscale prima, poi clip
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-                scaler.step(optimizer)
-                scaler.update()
-
-            # --- VALIDATION ---
-            model.eval()
-            running_mae = 0.0
-            with torch.no_grad():
-                for batch_x, batch_y in val_loader:
-                    batch_x = batch_x.to(self.device)
-                    batch_y = batch_y.to(self.device)
-
-                    # AMP: validation con autocast per consistenza
-                    with autocast(enabled=use_amp):
-                        pred = model(batch_x)
-                    running_mae += mae_fn(pred, batch_y).item()
-
-            avg_mae = running_mae / len(val_loader)
-            current_mase = avg_mae / baseline_mae
-
-            # Update best
-            if current_mase < best_mase:
-                best_mase = current_mase
-                epochs_no_improve = 0
-            else:
-                epochs_no_improve += 1
-
-            # Optuna reporting e pruning
-            if trial is not None:
-                trial.report(current_mase, epoch)
-                if trial.should_prune():
-                    raise optuna.TrialPruned()
-
-            # Early stopping
-            if epochs_no_improve >= patience:
-                break
-
-        return best_mase
+        return create_model(self.model_name, params)
 
     def _objective(self, trial: Trial) -> float:
         """
         Funzione obiettivo per Optuna.
-        Addestra il modello sui fold specificati e ritorna la media MASE.
+        Addestra il modello sui fold specificati e ritorna la media ponderata MASE.
+        I pesi sono proporzionali al numero di campioni di training per fold.
 
         Args:
             trial: oggetto Optuna Trial
 
         Returns:
-            float: media MASE sui fold
+            float: media ponderata MASE sui fold
         """
         # 1. Genera iperparametri
         params = get_hyperparameter_space(self.model_name, trial)
         lr = params.pop("lr")  # LR è gestito separatamente
+
+        # Estrai grad_clip_norm se presente (altrimenti default)
+        grad_clip_norm = params.pop("grad_clip_norm", 1.0)
 
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
@@ -236,8 +91,9 @@ class OptunaOptimizer:
             # Fase intensive: usa tutti i fold
             fold_indices = list(range(len(self.folds)))
 
-        # 3. Addestra su ogni fold
+        # 3. Addestra su ogni fold e raccogli risultati
         mase_scores = []
+
         for fold_idx in fold_indices:
             train_loader, val_loader, _ = self.folds[fold_idx]
 
@@ -245,21 +101,45 @@ class OptunaOptimizer:
             model = self._create_model(params)
             model.to(self.device)
 
-            # Addestra e valuta
-            mase = self._train_and_evaluate(
-                model, train_loader, val_loader, lr, fold_idx, trial
+            # Usa fit_model da engine.py (consolidato)
+            _, history, _ = fit_model(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                epochs=self.config["epochs"],
+                lr=lr,
+                device=self.device,
+                fold_idx=fold_idx,
+                patience=self.config["patience"],
+                trial=trial,  # Passa trial per pruning
+                grad_clip_norm=grad_clip_norm,
+                verbose=self.verbose,  # Controllato da parametro classe
             )
-            mase_scores.append(mase)
 
-        return sum(mase_scores) / len(mase_scores)
+            # Prendi il miglior MASE dalla history
+            best_mase = min(history["val_mase"])
+            mase_scores.append(best_mase)
 
-    def optimize(self, study_name: str, n_trials: int = None) -> dict:
+        # 4. Calcola media ponderata MASE (usa pesi pre-calcolati)
+        weights_to_use = [self.fold_weights[i] for i in fold_indices]
+        # Normalizza i pesi se non si usano tutti i fold
+        weight_sum = sum(weights_to_use)
+        weighted_mase = sum(
+            (w / weight_sum) * mase for w, mase in zip(weights_to_use, mase_scores)
+        )
+
+        return weighted_mase
+
+    def optimize(
+        self, study_name: str, n_trials: int = None, new_study: bool = True
+    ) -> dict:
         """
         Esegue l'ottimizzazione.
 
         Args:
             study_name: nome dello studio Optuna
             n_trials: numero di trial (default da config)
+            new_study: se True, crea nuovo studio. Se False, riprende esistente.
 
         Returns:
             dict: {
@@ -271,27 +151,57 @@ class OptunaOptimizer:
         if n_trials is None:
             n_trials = self.config["n_trials"]
 
-        # Crea o carica studio
+        # Storage SQLite per persistenza
         storage = f"sqlite:///{self.storage_path}" if self.storage_path else None
+
+        # Gestione nuovo studio vs ripresa
+        if new_study and storage:
+            # Elimina studio esistente se presente
+            try:
+                optuna.delete_study(study_name=study_name, storage=storage)
+                print(f"Studio '{study_name}' esistente eliminato.")
+            except KeyError:
+                pass  # Studio non esiste, ok
 
         study = optuna.create_study(
             study_name=study_name,
             storage=storage,
-            load_if_exists=True,
+            load_if_exists=not new_study,  # Carica se non è nuovo
             direction="minimize",
-            sampler=TPESampler(seed=42),
+            sampler=TPESampler(seed=SEED),
             pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=5),
         )
 
+        # Calcola trials rimanenti se si riprende
+        completed_trials = len(study.trials)
+        remaining_trials = max(0, n_trials - completed_trials)
+
         print(f"\n{'=' * 60}")
         print(f"Ottimizzazione: {self.model_name.upper()}")
+        print(f"Studio: {study_name}")
+        if completed_trials > 0:
+            print(
+                f"Trial completati: {completed_trials}, Rimanenti: {remaining_trials}"
+            )
+        else:
+            print(f"Trial totali: {n_trials}")
         print(
-            f"Trial: {n_trials}, Fold: {self.config['n_folds']}, "
+            f"Fold: {self.config['n_folds']}, "
             f"Epochs: {self.config['epochs']}, Patience: {self.config['patience']}"
+        )
+
+        # Stampa i pesi dei fold (pre-calcolati nel costruttore)
+        print(
+            f"Fold weights: {[f'{w:.3f}' for w in self.fold_weights]} (samples: {self.train_sample_counts})"
         )
         print(f"{'=' * 60}\n")
 
-        study.optimize(self._objective, n_trials=n_trials, show_progress_bar=True)
+        if remaining_trials > 0:
+            study.optimize(
+                self._objective, n_trials=remaining_trials, show_progress_bar=True
+            )
+        else:
+            print("Tutti i trial già completati. Nessuna ottimizzazione necessaria.")
 
         return {
             "best_params": study.best_params,

@@ -82,7 +82,7 @@ class TCN(nn.Module):
         super(TCN, self).__init__()
 
         # --- Lettura parametri da config (non più da train_loader) ---
-        self.input_size = model_config.get("input_size", 25)
+        self.input_size = model_config.get("input_size", 24)
 
         # Parametri da configurazione (come gli altri modelli)
         self.output_size = model_config.get("output_size", 24)

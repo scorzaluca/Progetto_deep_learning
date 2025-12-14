@@ -1,5 +1,5 @@
 """
-Configurazione per il training e l'ottimizzazione.
+Configurazione per il training.
 """
 
 from .model_config import LOOKBACK, HORIZON
@@ -19,26 +19,12 @@ SAMPLING_CONFIG = {
 }
 
 # --- TRAINING ---
+SEED = 42
 EPOCHS = 50
 LEARNING_RATE = 0.001
 
 # --- BENCHMARK (per MASE) ---
-NAIVE_MAE_PER_FOLD = [0.06171385527493945, 0.07321843994187488, 0.06725753733105418]
+NAIVE_MAE_PER_FOLD = [0.06228089907571026, 0.08621430409181377, 0.06193031994221003]
 
-# --- PERCORSI ---
-RESULTS_DIR = "./results/"
-
-# --- OPTUNA ---
-SCREENING_CONFIG = {
-    "n_trials": 15,
-    "n_folds": 1,  # Usa fold più grande (indice 2)
-    "patience": 5,
-    "epochs": 30,
-}
-
-INTENSIVE_CONFIG = {
-    "n_trials": 50,
-    "n_folds": 3,  # Tutti i fold
-    "patience": 10,
-    "epochs": 50,
-}
+# MAE del modello naive sul final training fold (22 mesi train + 2 mesi val)
+NAIVE_MAE_FINAL_FOLD = 0.04919686427582865
