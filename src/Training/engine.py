@@ -76,6 +76,8 @@ def create_model(model_name: str, params: dict) -> nn.Module:
         model_config = {
             "num_channels": INPUT_SIZE,
             "target_idx": TARGET_IDX,
+            "lookback": LOOKBACK,  # Passa lookback esplicitamente
+            "horizon": HORIZON,  # Passa horizon esplicitamente
             "patch_length": params["patch_length"],
             "stride": params["stride"],
             "d_model": params["d_model"],

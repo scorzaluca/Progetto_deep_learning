@@ -23,22 +23,26 @@ class PatchTST(nn.Module):
 
         Args:
             model_config: Dizionario con i parametri del modello.
+                          Deve contenere 'lookback' e 'horizon'.
         """
         super().__init__()
 
         # LAZY IMPORT: carica transformers solo quando serve
         from transformers import PatchTSTConfig, PatchTSTForPrediction
 
-        # Lettura parametri da config (non più da train_loader)
+        # Lettura parametri da model_config
         self.num_channels = model_config.get("num_channels", 25)
         self.target_idx = model_config.get("target_idx", 24)
 
-        print(
-            f"PatchTST - Features: {self.num_channels}, target_idx: {self.target_idx}"
-        )
+        # LOOKBACK e HORIZON dal model_config (permette override da notebook)
+        # Fallback ai valori globali solo se non specificati
+        self.lookback = model_config.get("lookback", LOOKBACK)
+        self.horizon = model_config.get("horizon", HORIZON)
 
-        self.lookback = LOOKBACK
-        self.horizon = HORIZON
+        print(
+            f"PatchTST - Features: {self.num_channels}, target_idx: {self.target_idx}, "
+            f"lookback: {self.lookback}, horizon: {self.horizon}"
+        )
 
         # Configurazione del modello HuggingFace
         # - context_length: finestra di input (lookback)
