@@ -1,19 +1,19 @@
 import torch
 from .zero_shot_wrapper import ZeroShotWrapper
-from chronos import BaseChronosPipeline
+from chronos import Chronos2Pipeline
 
 
 # src/ModelClasses/ChronosWrapper.py
 class ChronosWrapper(ZeroShotWrapper):
-    """Wrapper per modelli Chronos."""
+    """Wrapper for Chronos model."""
     
     def __init__(self):
         """
-        Inizializza Chronos-2
+        Initialize Chronos-2
         """
         self.model_name= "chronos-2"
         
-        self.pipeline = BaseChronosPipeline.from_pretrained(
+        self.pipeline = Chronos2Pipeline.from_pretrained(
             "amazon/chronos-2",  # Non più f"amazon/chronos-t5-{model_size}"
             device_map="cuda" if torch.cuda.is_available() else "cpu",
             torch_dtype=torch.bfloat16
@@ -21,36 +21,49 @@ class ChronosWrapper(ZeroShotWrapper):
     
     def predict(self, context: torch.Tensor, horizon: int, val_loader) -> torch.Tensor:
         """
-        Genera predizioni zero-shot su dati normalizzati.
+        Make predictions zero-shot on normalized data.
         
         Args:
-            context: Tensor (batch_size, lookback, features) - dati normalizzati [0,1]
-            horizon: numero di passi da predire (es. 24)
-            val_loader: DataLoader per accedere a target_col_idx
-        
+            context: Tensor (batch_size, lookback, features) - normalized data [0,1]
+            horizon: step to predict (es. 24)
+            val_loader: validation dataloader
         Returns:
-            Tensor (batch_size, horizon, 1) - predizioni normalizzate [0,1]
+            Tensor (batch_size, horizon, 1) - normalized predictions [0,1]
         """
-        # Ottieni l'indice della colonna target dal dataset (COME IN NAIVE.PY!)
+        # Ottieni l'indice della colonna target dal dataset (COME IN NAIVE.PY!) 
         target_idx = val_loader.dataset.target_col_idx
         
         batch_size = context.shape[0]
         
-        # Estrai la colonna target usando l'indice dinamico
-        context_series = context[:, :, target_idx]  # (batch_size, lookback)
-        
         predictions = []
         for i in range(batch_size):
-            series = context_series[i].unsqueeze(0)  # (1, lookback)
+            # Target: solo la colonna target dal lookback
+            target_series = context[i, :, target_idx].cpu().numpy()  # shape: (48,)
             
-            # Predizione Chronos
-            quantiles, mean = self.pipeline.predict_quantiles(
-                context=series,
-                prediction_length=horizon,
-                quantile_levels=[0.1, 0.5, 0.9]
+            # Past covariates: tutte le altre colonne dal lookback
+            past_covs = {}
+            num_features = context.shape[2]
+            for feat_idx in range(num_features):
+                if feat_idx != target_idx:
+                    past_covs[f"feat_{feat_idx}"] = context[i, :, feat_idx].cpu().numpy()  # shape: (48,)
+            
+            # Input strutturato per Chronos-2
+            input_dict = {
+                "target": target_series,  # (48,)
+                "past_covariates": past_covs if past_covs else None,
+                # NO future_covariates -> niente data leakage!
+            }
+            
+            # Chiamata Chronos-2
+            preds = self.pipeline.predict(
+                inputs=[input_dict],
+                prediction_length=horizon
             )
             
-            pred = mean.squeeze(0)  # (horizon,)
+            # Output: preds è una lista, preds[0] ha shape (1, n_quantiles, horizon)
+            # Prendiamo la mediana (quantile centrale, indice 1 se [0.1, 0.5, 0.9])
+            pred_raw = preds[0][0, 1, :]
+            pred = pred_raw if isinstance(pred_raw, torch.Tensor) else torch.tensor(pred_raw)
             predictions.append(pred)
         
         # Stack e reshape

@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 import torch
 
 
-# src/ModelClasses/ZeroShotWrapper.py
 class ZeroShotWrapper(ABC):
-    """Interfaccia base per wrapper di modelli zero-shot."""
+    """Wrapper zero-shot model standard interface"""
     
     @abstractmethod
     def predict(self, context: torch.Tensor, horizon: int, val_loader) -> torch.Tensor:
@@ -12,5 +11,5 @@ class ZeroShotWrapper(ABC):
     
     @abstractmethod
     def get_model_info(self) -> dict:
-        """Ritorna informazioni sul modello (size, type, ecc.)."""
+        """methods which gives back model info (size, type, ecc.)."""
         pass

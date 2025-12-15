@@ -7,21 +7,20 @@ import torch
 import torch.nn as nn
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 from config import TARGET_COL, SAMPLING_CONFIG, NAIVE_MAE_PER_FOLD, RESULTS_DIR
 from DataLoading import TS_Cross_Validator
-from ModelClasses import ChronosWrapper, LagLlamaWrapper
+from ModelClasses import ChronosWrapper
+from Utils import plot_predictions
 
 # Configurazione
 FOLD_INDEX = 2  # Stesso fold dello screening (il più grande)
-DATA_PATH = "data/processed/adjusted_ds.csv"
+DATA_PATH = "data/processed/preprocessed_ds.csv"
 
 # Modelli zero-shot da valutare
 MODELS_TO_EVALUATE = {
     "chronos-2": ChronosWrapper,
-    "lag-llama": LagLlamaWrapper,
-    # Aggiungi altri modelli zero-shot qui in futuro
-    # "timegpt": TimeGPTWrapper,
 }
 
 
@@ -54,7 +53,7 @@ def load_data_and_fold():
     return train_loader, val_loader, scaler
 
 
-def evaluate_model(wrapper, val_loader, device, fold_idx):
+def evaluate_model(wrapper, val_loader, scaler,device, fold_idx, model_name):
     """
     Valuta un modello zero-shot sul validation set.
     IDENTICO alla logica di optuna_optimizer.py righe 155-166.
@@ -74,9 +73,15 @@ def evaluate_model(wrapper, val_loader, device, fold_idx):
     
     print(f"\n  Inferenza su validation set ({len(val_loader)} batch)...")
     running_mae = 0.0
+
+    all_preds = []
+    all_targets = []
+    
+    target_idx = val_loader.dataset.target_col_idx
     
     with torch.no_grad():
         for batch_idx, (batch_x, batch_y) in enumerate(val_loader):
+            # Passa batch_x e batch_y al device
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
             
@@ -86,6 +91,9 @@ def evaluate_model(wrapper, val_loader, device, fold_idx):
             
             # Calcola MAE
             running_mae += mae_fn(pred, batch_y).item()
+
+            all_preds.append(pred[:, 0, 0].cpu().numpy())
+            all_targets.append(batch_y[:, 0, 0].cpu().numpy())
             
             # Progress ogni 50 batch
             if (batch_idx + 1) % 50 == 0:
@@ -96,6 +104,23 @@ def evaluate_model(wrapper, val_loader, device, fold_idx):
     
     print(f"  MAE: {avg_mae:.6f}")
     print(f"  MASE: {mase:.4f}")
+
+    # Concatena e denormalizza per plot
+    preds_flat = np.concatenate(all_preds)
+    targets_flat = np.concatenate(all_targets)
+    
+    # Denormalizza (target è l'unica colonna, usa inverse_transform parziale)
+    # Crea array dummy per inverse_transform
+    n_features = scaler.n_features_in_
+    preds_full = np.zeros((len(preds_flat), n_features))
+    targets_full = np.zeros((len(targets_flat), n_features))
+    preds_full[:, target_idx] = preds_flat
+    targets_full[:, target_idx] = targets_flat
+    
+    preds_denorm = scaler.inverse_transform(preds_full)[:, target_idx]
+    targets_denorm = scaler.inverse_transform(targets_full)[:, target_idx]
+
+    plot_predictions(preds_denorm, targets_denorm, model_name, fold_idx, RESULTS_DIR)
     
     return mase
 
@@ -133,7 +158,7 @@ def main():
             print(f"  Parametri: {model_info.get('parameters', 'N/A')}")
             
             # Valuta (SOLO SU VAL_LOADER!)
-            mase = evaluate_model(wrapper, val_loader, device, FOLD_INDEX)
+            mase = evaluate_model(wrapper, val_loader, scaler, device, FOLD_INDEX, model_name)
             
             # Salva risultati
             results[model_name] = {
