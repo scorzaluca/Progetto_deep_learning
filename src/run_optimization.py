@@ -76,7 +76,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
 
     # Usa fit_model con early stopping (stessa logica dell'ottimizzazione)
     # Passa baseline_mae direttamente invece di fold_idx per il final training
-    model, history, best_mase = fit_model(
+    model, history, best_epoch = fit_model(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -90,6 +90,9 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         verbose=True,  # Verbose per vedere il progresso
         baseline_mae=NAIVE_MAE_FINAL_FOLD,  # MAE naive per calcolo MASE
     )
+
+    # Estrai il best MASE dalla history (all'epoca migliore)
+    best_mase = history["val_mase"][best_epoch]
 
     # Salva checkpoint
     checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
