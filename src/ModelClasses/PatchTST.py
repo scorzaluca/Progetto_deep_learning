@@ -1,5 +1,5 @@
 import torch.nn as nn
-from config import LOOKBACK, HORIZON
+from ..config import LOOKBACK, HORIZON
 
 
 class PatchTST(nn.Module):
