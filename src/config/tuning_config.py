@@ -26,7 +26,7 @@ STUDY_NAME = "lstm_v1"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)
-NEW_STUDY = True
+NEW_STUDY = False
 
 # =============================================================================
 # PERCORSI

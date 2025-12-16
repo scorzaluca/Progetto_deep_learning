@@ -161,7 +161,7 @@ def main():
     # Salva risultati
     save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"])
 
-    '''# Retraining finale su tutto il dataset
+    # Retraining finale su tutto il dataset
     checkpoint_path = train_final_model(MODEL_NAME, result["best_params"], df, device)
 
     print("\n" + "=" * 60)
@@ -173,7 +173,7 @@ def main():
     print(f"Checkpoint: {checkpoint_path}")
     print("\nPer recuperare lo studio:")
     print(f'  optuna.load_study("{STUDY_NAME}", storage="sqlite:///{storage_path}")')
-    print("=" * 60 + "\n")'''
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":
