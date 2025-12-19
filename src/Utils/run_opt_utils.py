@@ -34,14 +34,25 @@ def get_device():
     return device
 
 
-def load_data_and_folds():
-    """Carica il dataset e crea i fold per la cross-validation."""
+def load_data_and_folds(data_path: str = None):
+    """
+    Carica il dataset e crea i fold per la cross-validation.
+
+    Args:
+        data_path: Path al dataset CSV. Se None, usa DATA_PATH da config.
+
+    Returns:
+        Tuple[pd.DataFrame, list]: (dataframe, lista di folds)
+    """
     # Import lazy per evitare import circolare
     from ..config import TARGET_COL, SAMPLING_CONFIG, DATA_PATH
     from ..DataLoading import TS_Cross_Validator
 
-    print(f"Caricamento dataset: {DATA_PATH}")
-    df = pd.read_csv(DATA_PATH)
+    # Usa path passato o default da config
+    path = data_path if data_path is not None else DATA_PATH
+
+    print(f"Caricamento dataset: {path}")
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
     print(f"Shape: {df.shape}")
 
     validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
