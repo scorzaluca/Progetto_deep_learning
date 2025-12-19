@@ -11,4 +11,12 @@ except ImportError:
     ChronosWrapper = None
 
 # Definisco esplicitamente cosa viene esportato all'esterno
-__all__ = ["LSTM", "NaivePersistence", "DLinear", "PatchTST", "ChronosWrapper", "TCN"]
+__all__ = [
+    "LSTM",
+    "NaivePersistence",
+    "DLinearM",
+    "DLinearI",
+    "PatchTST",
+    "ChronosWrapper",
+    "TCN",
+]

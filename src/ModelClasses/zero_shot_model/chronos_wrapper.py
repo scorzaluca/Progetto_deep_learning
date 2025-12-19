@@ -11,12 +11,15 @@ class ChronosWrapper(ZeroShotWrapper):
         """
         Initialize Chronos-2
         """
-        self.model_name= "chronos-2"
-        
+        self.model_name = "chronos-2"
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch_dtype = torch.bfloat16 if device == "cuda" else torch.float32
+
         self.pipeline = Chronos2Pipeline.from_pretrained(
             "amazon/chronos-2",  # Non più f"amazon/chronos-t5-{model_size}"
-            device_map="cuda" if torch.cuda.is_available() else "cpu",
-            torch_dtype=torch.bfloat16
+            device_map=device,
+            torch_dtype=torch_dtype,
         )
     
     def predict(self, context: torch.Tensor, horizon: int, val_loader) -> torch.Tensor:
