@@ -52,7 +52,7 @@ def load_data_and_folds(data_path: str = None):
     path = data_path if data_path is not None else DATA_PATH
 
     print(f"Caricamento dataset: {path}")
-    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    df = pd.read_csv(path)
     print(f"Shape: {df.shape}")
 
     validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
