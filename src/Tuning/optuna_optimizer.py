@@ -82,6 +82,9 @@ class OptunaOptimizer:
         # Estrai grad_clip_norm se presente (altrimenti default)
         grad_clip_norm = params.pop("grad_clip_norm", 1.0)
 
+        # Estrai weight_decay se presente (altrimenti default)
+        weight_decay = params.pop("weight_decay", 0.01)
+
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
         if n_folds_to_use == 1:
@@ -112,6 +115,7 @@ class OptunaOptimizer:
                 fold_idx=fold_idx,
                 patience=self.config["patience"],
                 trial=trial,  # Passa trial per pruning
+                optimizer_kwargs={"weight_decay": weight_decay},
                 grad_clip_norm=grad_clip_norm,
                 verbose=self.verbose,  # Controllato da parametro classe
             )

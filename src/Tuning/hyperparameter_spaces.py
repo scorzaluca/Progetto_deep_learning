@@ -80,6 +80,7 @@ def get_tcn_space(trial) -> dict:
         "kernel_size": trial.suggest_categorical("kernel_size", [2, 3, 4, 5]),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
+        "weight_decay": trial.suggest_float("weight_decay", 1e-5, 1e-2, log=True),
     }
 
 
