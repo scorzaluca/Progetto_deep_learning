@@ -62,7 +62,7 @@ def load_data_and_folds(data_path: str = None):
     return df, folds
 
 
-def save_results(model_name: str, study_name: str, best_params: dict, best_mase: float):
+def save_results(model_name: str, study_name: str, best_params: dict, best_mase: float, best_rmse: float):
     """Salva i best params in un file JSON."""
     # Import lazy per evitare import circolare
     from ..config import RESULTS_DIR
@@ -74,6 +74,7 @@ def save_results(model_name: str, study_name: str, best_params: dict, best_mase:
         "model_name": model_name,
         "study_name": study_name,
         "best_mase": best_mase,
+        "best_rmse": best_rmse,
         "best_params": best_params,
     }
 
