@@ -4,6 +4,7 @@ from .dlinear import DLinearM, DLinearI
 from .PatchTST import PatchTST
 from .tcn import TCN
 
+
 # Import opzionale per ChronosWrapper (richiede chronos-forecasting)
 try:
     from .zero_shot_model import ChronosWrapper

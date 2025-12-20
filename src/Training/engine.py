@@ -101,10 +101,29 @@ def create_model(model_name: str, params: dict) -> nn.Module:
         }
         return TCN(model_config=model_config)
 
+
+    elif model_name == "patchtst_finetune":
+        from ..ModelClasses import PatchTSTFinetune
+    
+        model_config = {
+            "num_channels": INPUT_SIZE,
+            "target_idx": TARGET_IDX,
+            "lookback": LOOKBACK,
+            "horizon": HORIZON,
+            "patch_length": params["patch_length"],
+            "stride": params["stride"],
+            "d_model": params["d_model"],
+            "n_heads": params["n_heads"],
+            "n_layers": params["n_layers"],
+            "dropout": params["dropout"],
+            "freeze_backbone": params.get("freeze_backbone", False),
+        }
+        return PatchTSTFinetune(model_config=model_config)
+
     else:
         raise ValueError(
             f"Modello '{model_name}' non supportato. "
-            f"Modelli validi: lstm, dlinearm, dlineari, patchtst, tcn"
+            f"Modelli validi: lstm, dlinearm, dlineari, patchtst, tcn, patchtst_finetune"
         )
 
 
