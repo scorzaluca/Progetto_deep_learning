@@ -20,7 +20,7 @@ def get_lstm_space(trial) -> dict:
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
         "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128, 256]),
         "num_layers": trial.suggest_int("num_layers", 1, 3),
-        "dropout": trial.suggest_float("dropout", 0.0, 0.3),
+        "dropout": trial.suggest_float("dropout", 0.0, 0.5),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
     }
 

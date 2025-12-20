@@ -194,9 +194,22 @@ class OptunaOptimizer:
             f"Epochs: {self.config['epochs']}, Patience: {self.config['patience']}"
         )
 
-        # Stampa i pesi dei fold (pre-calcolati nel costruttore)
+        n_folds_to_use = self.config["n_folds"]
+        if n_folds_to_use == 1:
+            fold_indices = [2] if len(self.folds) > 2 else [len(self.folds) - 1]
+        else:
+            fold_indices = list(range(len(self.folds)))
+
+
+        weights_to_use = [self.fold_weights[i] for i in fold_indices]
+        weight_sum = sum(weights_to_use)
+        effective_weights = [
+            (self.fold_weights[i] / weight_sum) if i in fold_indices else 0.0
+            for i in range(len(self.folds))
+        ]
+        
         print(
-            f"Fold weights: {[f'{w:.3f}' for w in self.fold_weights]} (samples: {self.train_sample_counts})"
+            f"Fold weights: {[f'{w:.3f}' for w in effective_weights]} (samples: {self.train_sample_counts})"
         )
         print(f"{'=' * 60}\n")
 
