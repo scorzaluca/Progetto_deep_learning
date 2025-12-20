@@ -12,7 +12,7 @@ MODEL_NAME = "lstm"
 # =============================================================================
 # PARAMETRI OTTIMIZZAZIONE
 # =============================================================================
-N_TRIALS = 10  # Numero di trial Optuna
+N_TRIALS = 3  # Numero di trial Optuna
 N_FOLDS = 1  # 1 = solo fold più grande (idx 2), 2 o 3 = più fold
 EPOCHS = 30  # Epoche massime per trial
 PATIENCE = 7  # Early stopping patience
@@ -22,11 +22,11 @@ PATIENCE = 7  # Early stopping patience
 # =============================================================================
 # Nome dello studio (usato per salvare/riprendere)
 # Cambia questo nome per ogni nuova ottimizzazione dello stesso modello
-STUDY_NAME = "lstm_v1"
+STUDY_NAME = "dlineari_prova3"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)
-NEW_STUDY = False
+NEW_STUDY = True
 
 # =============================================================================
 # PERCORSI

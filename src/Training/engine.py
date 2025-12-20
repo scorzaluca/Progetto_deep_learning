@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.amp import autocast, GradScaler  # AMP per mixed precision
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import optuna
 from ..config import NAIVE_MAE_PER_FOLD, INPUT_SIZE, TARGET_IDX, LOOKBACK, HORIZON
 
@@ -159,7 +160,7 @@ def train_one_epoch(
     for batch_x, batch_y in dataloader:
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # AMP: forward con autocast
         with autocast(device_type="cuda", enabled=use_amp):
@@ -250,6 +251,9 @@ def fit_model(
     grad_clip_norm=1.0,
     verbose=True,
     baseline_mae=None,
+    scheduler_cls=ReduceLROnPlateau,
+    scheduler_kwargs=None,
+    scheduler_metric="val_mase",
 ):
     """
     Ciclo principale di addestramento con Early Stopping.
@@ -271,6 +275,9 @@ def fit_model(
         grad_clip_norm: Norma massima per gradient clipping (None per disabilitare).
         verbose: Se True, stampa progress durante il training.
         baseline_mae: MAE del modello naive per calcolare MASE. Se None, usa NAIVE_MAE_PER_FOLD[fold_idx].
+        scheduler_cls: Classe scheduler (default: ReduceLROnPlateau).
+        scheduler_kwargs: Kwargs extra per lo scheduler.
+        scheduler_metric: Metrica da monitorare per ReduceLROnPlateau ("val_mase" o "val_loss").
 
     Returns:
         tuple: (model, history, best_epoch)
@@ -282,11 +289,20 @@ def fit_model(
     if optimizer_cls is None:
         optimizer_cls = torch.optim.AdamW
     if optimizer_kwargs is None:
-        optimizer_kwargs = {"weight_decay": 0.01}
+        optimizer_kwargs = {"weight_decay": 0.001}
     if loss_fn is None:
         loss_fn = nn.MSELoss()
 
     optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
+
+    if scheduler_kwargs is None:
+        scheduler_kwargs = {
+            "mode": "min",
+            "factor": 0.5,
+            "patience": 3,
+            "min_lr": 1e-6,
+        }
+    scheduler = scheduler_cls(optimizer, **scheduler_kwargs) if scheduler_cls else None
 
     # AMP: crea scaler solo se su CUDA
     use_amp = device.type == "cuda"
@@ -310,6 +326,8 @@ def fit_model(
     best_model_wts = copy.deepcopy(model.state_dict())
     best_epoch = 0
 
+    log_lr = fold_idx is None and baseline_mae is not None
+
     if verbose:
         print(f"Start Training on {device}...")
 
@@ -332,15 +350,33 @@ def fit_model(
         history["val_mase"].append(current_mase)
         history["val_rmse"].append(val_rmse)
 
+        if scheduler is not None:
+            if isinstance(scheduler, ReduceLROnPlateau):
+                metric = current_mase if scheduler_metric == "val_mase" else val_loss
+                scheduler.step(metric)
+            else:
+                scheduler.step()
+
         # Stampa pulita
         if verbose and ((epoch + 1) % 5 == 0 or epoch == 0):
-            print(
-                f"Epoch {epoch + 1}/{epochs} | "
-                f"Train MSE: {train_loss:.6f} | "
-                f"Val MSE: {val_loss:.6f} | "
-                f"Val MASE: {current_mase:.4f} | "
-                f"Val RMSE: {val_rmse:.6f}"
-            )
+            if log_lr:
+                current_lr = optimizer.param_groups[0]["lr"]
+                print(
+                    f"Epoch {epoch + 1}/{epochs} | "
+                    f"Train MSE: {train_loss:.6f} | "
+                    f"Val MSE: {val_loss:.6f} | "
+                    f"Val MASE: {current_mase:.4f} | "
+                    f"Val RMSE: {val_rmse:.6f} | "
+                    f"LR: {current_lr:.6g}"
+                )
+            else:
+                print(
+                    f"Epoch {epoch + 1}/{epochs} | "
+                    f"Train MSE: {train_loss:.6f} | "
+                    f"Val MSE: {val_loss:.6f} | "
+                    f"Val MASE: {current_mase:.4f} | "
+                    f"Val RMSE: {val_rmse:.6f}"
+                )
 
         # --- OPTUNA INTEGRATION ---
         if trial is not None:
