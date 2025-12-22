@@ -14,15 +14,15 @@ MODEL_NAME = "dlinearm"
 # =============================================================================
 N_TRIALS = 2  # Numero di trial Optuna
 N_FOLDS = 3  # 1 = solo fold più grande (idx 2), 2 o 3 = più fold
-EPOCHS = 30  # Epoche massime per trial
-PATIENCE = 7  # Early stopping patience
+EPOCHS = 20  # Epoche massime per trial
+PATIENCE = 4  # Early stopping patience
 
 # =============================================================================
 # GESTIONE STUDIO OPTUNA
 # =============================================================================
 # Nome dello studio (usato per salvare/riprendere)
 # Cambia questo nome per ogni nuova ottimizzazione dello stesso modello
-STUDY_NAME = "dlinearm_prova1"
+STUDY_NAME = "dlinearm_dumb"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)

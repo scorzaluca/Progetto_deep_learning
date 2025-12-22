@@ -1,7 +1,6 @@
 """
 OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi, obiettivi e pruning.
-Utilizza fit_model da engine.py per evitare duplicazione di logica.
 """
 
 import optuna
@@ -11,7 +10,7 @@ from optuna.samplers import TPESampler
 import torch
 
 from .hyperparameter_spaces import get_hyperparameter_space
-from ..Training.engine import fit_model, create_model
+from ..Training.engine import create_model
 from ..config import SEED
 
 
@@ -65,76 +64,171 @@ class OptunaOptimizer:
 
     def _objective(self, trial: Trial) -> float:
         """
-        Funzione obiettivo per Optuna.
-        Addestra il modello sui fold specificati e ritorna la media ponderata MASE.
-        I pesi sono proporzionali al numero di campioni di training per fold.
+        Funzione obiettivo per Optuna con training INTERLEAVED sui fold.
+
+        Invece di addestrare ogni fold completamente in sequenza, addestra
+        tutti i fold un'epoca alla volta e calcola il MASE ponderato dopo
+        ogni epoca. Questo permette un pruning più accurato basato sulla
+        metrica aggregata (quella che conta davvero).
+
+        Caratteristiche (come fit_model):
+        - AMP (Automatic Mixed Precision) su CUDA
+        - AdamW con weight_decay
+        - ReduceLROnPlateau scheduler
+        - Gradient clipping
+        - Early stopping globale
+        - Best weights saving per fold
 
         Args:
             trial: oggetto Optuna Trial
 
         Returns:
-            float: media ponderata MASE sui fold
+            float: media ponderata del miglior MASE sui fold
         """
-        # 1. Genera iperparametri
-        params = get_hyperparameter_space(self.model_name, trial)
-        lr = params.pop("lr")  # LR è gestito separatamente
+        import copy
+        import torch.nn as nn
+        from torch.amp import GradScaler
+        from torch.optim.lr_scheduler import ReduceLROnPlateau
+        from ..Training.engine import train_one_epoch, validate_one_epoch
+        from ..config import NAIVE_MAE_PER_FOLD
 
-        # Estrai grad_clip_norm se presente (altrimenti default)
+        # 1. Genera iperparametri (tutti opzionali hanno fallback default)
+        params = get_hyperparameter_space(self.model_name, trial)
+
+        # Parametri di training (estratti con fallback default)
+        lr = params.pop("lr")
         grad_clip_norm = params.pop("grad_clip_norm", 1.0)
+        weight_decay = params.pop("weight_decay", 0.001)
+
+        # Parametri scheduler (opzionali, con default come fit_model)
+        scheduler_factor = params.pop("scheduler_factor", 0.5)
+        scheduler_patience = params.pop("scheduler_patience", 3)
+        scheduler_min_lr = params.pop("scheduler_min_lr", 1e-6)
+
+        # params ora contiene solo iperparametri del modello
 
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
         if n_folds_to_use == 1:
-            # Fase screening: usa fold più grande (indice 2, il terzo)
             fold_indices = [2] if len(self.folds) > 2 else [len(self.folds) - 1]
         else:
-            # Fase intensive: usa tutti i fold
             fold_indices = list(range(len(self.folds)))
 
-        # 3. Addestra su ogni fold e raccogli risultati
-        mase_scores = []
         epochs = self.config["epochs"]
+        patience = self.config["patience"]
 
-        for i, fold_idx in enumerate(fold_indices):
+        # 3. Setup: crea modelli, optimizer, scheduler, scaler per ogni fold
+        fold_states = []
+        for fold_idx in fold_indices:
             train_loader, val_loader, _ = self.folds[fold_idx]
 
-            # Crea modello
             model = self._create_model(params)
             model.to(self.device)
 
-            # Calcola epoch_offset per step globale Optuna
-            # Fold 0: step 0-29, Fold 1: step 30-59, Fold 2: step 60-89
-            epoch_offset = i * epochs
-
-            # Usa fit_model da engine.py (consolidato)
-            _, history, _ = fit_model(
-                model=model,
-                train_loader=train_loader,
-                val_loader=val_loader,
-                epochs=epochs,
-                lr=lr,
-                device=self.device,
-                fold_idx=fold_idx,
-                patience=self.config["patience"],
-                trial=trial,
-                epoch_offset=epoch_offset,
-                grad_clip_norm=grad_clip_norm,
-                verbose=self.verbose,
+            optimizer = torch.optim.AdamW(
+                model.parameters(), lr=lr, weight_decay=weight_decay
             )
 
-            # Prendi il miglior MASE dalla history
-            best_mase = min(history["val_mase"])
-            mase_scores.append(best_mase)
+            # Scheduler: riduce LR quando MASE non migliora
+            scheduler = ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                factor=scheduler_factor,
+                patience=scheduler_patience,
+                min_lr=scheduler_min_lr,
+            )
 
-        # 4. Calcola media ponderata MASE (usa pesi pre-calcolati)
-        weights_to_use = [self.fold_weights[i] for i in fold_indices]
-        # Normalizza i pesi se non si usano tutti i fold
-        weight_sum = sum(weights_to_use)
-        weighted_mase = sum(
-            (w / weight_sum) * mase for w, mase in zip(weights_to_use, mase_scores)
+            use_amp = self.device.type == "cuda"
+            scaler = GradScaler(enabled=use_amp) if use_amp else None
+
+            fold_states.append(
+                {
+                    "model": model,
+                    "optimizer": optimizer,
+                    "scheduler": scheduler,
+                    "scaler": scaler,
+                    "train_loader": train_loader,
+                    "val_loader": val_loader,
+                    "baseline_mae": NAIVE_MAE_PER_FOLD[fold_idx],
+                    "best_mase": float("inf"),
+                    "best_weights": copy.deepcopy(model.state_dict()),
+                }
+            )
+
+        loss_fn = nn.MSELoss()
+
+        # Pesi per media ponderata
+        # NOTA: rinormalizziamo perché se n_folds < len(folds), i pesi non sommano a 1
+        weights = [self.fold_weights[i] for i in fold_indices]
+        weight_sum = sum(weights)
+        normalized_weights = [w / weight_sum for w in weights]
+
+        # 4. Training loop interleaved
+        best_weighted_mase = float("inf")
+        epochs_no_improve = 0
+
+        for epoch in range(epochs):
+            epoch_mase_scores = []
+
+            # Train + validate ogni fold per questa epoca
+            for state in fold_states:
+                # Training
+                train_one_epoch(
+                    state["model"],
+                    state["train_loader"],
+                    state["optimizer"],
+                    loss_fn,
+                    self.device,
+                    grad_clip_norm,
+                    state["scaler"],
+                )
+
+                # Validation
+                _, val_mae, _ = validate_one_epoch(
+                    state["model"],
+                    state["val_loader"],
+                    loss_fn,
+                    self.device,
+                )
+
+                # Calcola MASE per questo fold
+                fold_mase = val_mae / state["baseline_mae"]
+                epoch_mase_scores.append(fold_mase)
+
+                # Scheduler step (riduce LR se MASE non migliora)
+                state["scheduler"].step(fold_mase)
+
+                # Aggiorna best per questo fold
+                if fold_mase < state["best_mase"]:
+                    state["best_mase"] = fold_mase
+                    state["best_weights"] = copy.deepcopy(state["model"].state_dict())
+
+            # Calcola MASE ponderato per questa epoca
+            weighted_mase = sum(
+                w * mase for w, mase in zip(normalized_weights, epoch_mase_scores)
+            )
+
+            # Report a Optuna per pruning
+            trial.report(weighted_mase, epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+            # Early stopping globale (sulla media ponderata)
+            if weighted_mase < best_weighted_mase:
+                best_weighted_mase = weighted_mase
+                epochs_no_improve = 0
+            else:
+                epochs_no_improve += 1
+                if epochs_no_improve >= patience:
+                    break
+
+        # 5. Ritorna la media ponderata dei MIGLIORI MASE di ogni fold
+        best_mase_scores = [state["best_mase"] for state in fold_states]
+        final_weighted_mase = sum(
+            w * mase for w, mase in zip(normalized_weights, best_mase_scores)
         )
 
-        return weighted_mase
+        return final_weighted_mase
 
     def optimize(
         self, study_name: str, n_trials: int = None, new_study: bool = True

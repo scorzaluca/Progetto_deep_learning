@@ -6,7 +6,7 @@ from .model_config import LOOKBACK, HORIZON
 
 # --- SAMPLING ---
 STEP_TRAIN = 1  # Passo tra campioni per training (tutti i campioni)
-STEP_VAL = 6  # Passo tra campioni per validation (campioni meno correlati)
+STEP_VAL = 1  # Passo tra campioni per validation (campioni meno correlati)
 BATCH_SIZE = 64
 N_SPLITS = 3
 TARGET_COL = "pv_power"

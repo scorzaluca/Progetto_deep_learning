@@ -68,9 +68,15 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     model = create_model(model_name, best_params)
     model.to(device)
 
-    # Estrai parametri
+    # Estrai parametri di training (con fallback default come nel tuning)
     lr = best_params.get("lr", 0.001)
     grad_clip_norm = best_params.get("grad_clip_norm", 1.0)
+    weight_decay = best_params.get("weight_decay", 0.001)
+
+    # Parametri scheduler (per futura ottimizzazione)
+    scheduler_factor = best_params.get("scheduler_factor", 0.5)
+    scheduler_patience = best_params.get("scheduler_patience", 3)
+    scheduler_min_lr = best_params.get("scheduler_min_lr", 1e-6)
 
     print(f"Training {model_name.upper()} con early stopping (patience={PATIENCE})...")
 
@@ -86,9 +92,16 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         fold_idx=None,  # Non è un fold, usa baseline_mae
         patience=PATIENCE,
         trial=None,  # Nessun pruning Optuna
+        optimizer_kwargs={"weight_decay": weight_decay},
         grad_clip_norm=grad_clip_norm,
-        verbose=True,  # Verbose per vedere il progresso
-        baseline_mae=NAIVE_MAE_FINAL_FOLD,  # MAE naive per calcolo MASE
+        verbose=True,
+        baseline_mae=NAIVE_MAE_FINAL_FOLD,
+        scheduler_kwargs={
+            "mode": "min",
+            "factor": scheduler_factor,
+            "patience": scheduler_patience,
+            "min_lr": scheduler_min_lr,
+        },
     )
 
     # Estrai il best MASE dalla history (all'epoca migliore)
