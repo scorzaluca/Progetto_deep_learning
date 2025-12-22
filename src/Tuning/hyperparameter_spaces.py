@@ -114,7 +114,6 @@ SPACE_REGISTRY = {
     "patchtst": get_patchtst_space,
     "tcn": get_tcn_space,
     "encoderlstm": get_encoderlstm_space,
-    "patchtst_finetune": get_patchtst_finetune_space,
 }
 
 
