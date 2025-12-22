@@ -1,10 +1,8 @@
 import torch
-from .zero_shot_wrapper import ZeroShotWrapper
 from chronos import Chronos2Pipeline
 
 
-# src/ModelClasses/ChronosWrapper.py
-class ChronosWrapper(ZeroShotWrapper):
+class ChronosWrapper:
     """Wrapper for Chronos model."""
     
     def __init__(self):

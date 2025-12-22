@@ -7,12 +7,12 @@ Modifica questi parametri manualmente prima di ogni run di ottimizzazione.
 # MODELLO DA OTTIMIZZARE
 # =============================================================================
 # Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn"
-MODEL_NAME = "dlinearm"
+MODEL_NAME = "patchtst_finetune"
 
 # =============================================================================
 # PARAMETRI OTTIMIZZAZIONE
 # =============================================================================
-N_TRIALS = 2  # Numero di trial Optuna
+N_TRIALS = 50  # Numero di trial Optuna
 N_FOLDS = 3  # 1 = solo fold più grande (idx 2), 2 o 3 = più fold
 EPOCHS = 20  # Epoche massime per trial
 PATIENCE = 4  # Early stopping patience
