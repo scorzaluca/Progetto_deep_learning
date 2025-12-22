@@ -245,6 +245,7 @@ def fit_model(
     fold_idx=None,
     patience=10,
     trial=None,
+    epoch_offset=0,
     optimizer_cls=None,
     optimizer_kwargs=None,
     loss_fn=None,
@@ -393,7 +394,8 @@ def fit_model(
 
         # --- OPTUNA INTEGRATION ---
         if trial is not None:
-            trial.report(current_mase, epoch)
+            global_step = epoch_offset + epoch
+            trial.report(current_mase, global_step)
             if trial.should_prune():
                 raise optuna.TrialPruned()
 

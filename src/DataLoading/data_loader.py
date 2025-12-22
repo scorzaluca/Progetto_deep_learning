@@ -23,7 +23,8 @@ class TS_Cross_Validator:
         self.lookback = cfg_dict.get("lookback", 48)
         self.horizon = cfg_dict.get("horizon", 24)
         self.batch_size = cfg_dict.get("batch_size", 64)
-        self.step = cfg_dict.get("step", 1)
+        self.step_train = cfg_dict.get("step_train", 1)
+        self.step_val = cfg_dict.get("step_val", 6)
         self.n_splits = cfg_dict.get("n_splits", 3)
 
         # Custom expanding window splits
@@ -84,16 +85,20 @@ class TS_Cross_Validator:
 
             train_scaled_df, val_scaled_extended, scaler = splitting_result
 
-            # Datasets
+            # Datasets (step diversi per train e validation)
             train_dataset = PVForecastDataset(
-                train_scaled_df, self.target_col, self.lookback, self.horizon, self.step
+                train_scaled_df,
+                self.target_col,
+                self.lookback,
+                self.horizon,
+                self.step_train,
             )
             val_dataset = PVForecastDataset(
                 val_scaled_extended,
                 self.target_col,
                 self.lookback,
                 self.horizon,
-                self.step,
+                self.step_val,
             )
 
             # DataLoaders con pin_memory per GPU speedup
@@ -132,7 +137,8 @@ def create_final_train_val_loaders(
     lookback: int = 48,
     horizon: int = 24,
     batch_size: int = 64,
-    step: int = 1,
+    step_train: int = 1,
+    step_val: int = 6,
 ):
     """
     Crea train/val DataLoaders per il retraining finale con early stopping.
@@ -144,7 +150,8 @@ def create_final_train_val_loaders(
         lookback: finestra di input
         horizon: finestra di output
         batch_size: dimensione batch
-        step: passo tra campioni
+        step_train: passo tra campioni per training
+        step_val: passo tra campioni per validation
 
     Returns:
         Tuple[DataLoader, DataLoader, MinMaxScaler]: train_loader, val_loader, scaler
@@ -170,12 +177,12 @@ def create_final_train_val_loaders(
     last_train_samples = train_scaled_df.iloc[-lookback:]
     val_scaled_extended = pd.concat([last_train_samples, val_scaled_df], axis=0)
 
-    # Crea datasets
+    # Crea datasets (step diversi per train e validation)
     train_dataset = PVForecastDataset(
-        train_scaled_df, target_col, lookback, horizon, step
+        train_scaled_df, target_col, lookback, horizon, step_train
     )
     val_dataset = PVForecastDataset(
-        val_scaled_extended, target_col, lookback, horizon, step
+        val_scaled_extended, target_col, lookback, horizon, step_val
     )
 
     # Crea DataLoaders

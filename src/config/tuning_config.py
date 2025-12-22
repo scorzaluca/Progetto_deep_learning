@@ -6,8 +6,8 @@ Modifica questi parametri manualmente prima di ogni run di ottimizzazione.
 # =============================================================================
 # MODELLO DA OTTIMIZZARE
 # =============================================================================
-# Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn", "patchtst_finetune"
-MODEL_NAME = "lstm"
+# Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn"
+MODEL_NAME = "dlinearm"
 
 # =============================================================================
 # PARAMETRI OTTIMIZZAZIONE

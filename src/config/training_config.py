@@ -5,7 +5,8 @@ Configurazione per il training.
 from .model_config import LOOKBACK, HORIZON
 
 # --- SAMPLING ---
-STEP = 1
+STEP_TRAIN = 1  # Passo tra campioni per training (tutti i campioni)
+STEP_VAL = 6  # Passo tra campioni per validation (campioni meno correlati)
 BATCH_SIZE = 64
 N_SPLITS = 3
 TARGET_COL = "pv_power"
@@ -14,7 +15,8 @@ SAMPLING_CONFIG = {
     "lookback": LOOKBACK,
     "horizon": HORIZON,
     "batch_size": BATCH_SIZE,
-    "step": STEP,
+    "step_train": STEP_TRAIN,
+    "step_val": STEP_VAL,
     "n_splits": N_SPLITS,
 }
 
