@@ -317,6 +317,16 @@ def fit_model(
     else:
         optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
 
+    # Crea scheduler
+    if scheduler_kwargs is None:
+        scheduler_kwargs = {
+            "mode": "min",
+            "factor": 0.5,
+            "patience": 3,
+            "min_lr": 1e-6,
+        }
+    scheduler = scheduler_cls(optimizer, **scheduler_kwargs) if scheduler_cls else None
+
     
     # AMP: crea scaler solo se su CUDA
     use_amp = device.type == "cuda"
