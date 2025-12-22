@@ -93,6 +93,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
 
     # Estrai il best MASE dalla history (all'epoca migliore)
     best_mase = history["val_mase"][best_epoch]
+    best_rmse = history["val_rmse"][best_epoch]
 
     # Salva checkpoint
     checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
@@ -104,7 +105,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     print(f"Best MASE su validation finale: {best_mase:.4f}")
     print(f"Epoche effettive: {len(history['train_loss'])}")
 
-    return checkpoint_path
+    return checkpoint_path, best_rmse
 
 
 def main():
@@ -158,11 +159,12 @@ def main():
     print(f"Best MASE: {result['best_mase']:.4f}")
     print(f"Best params: {result['best_params']}")
 
-    # Salva risultati
-    save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"])
-
+    
     # Retraining finale su tutto il dataset
-    checkpoint_path = train_final_model(MODEL_NAME, result["best_params"], df, device)
+    checkpoint_path, best_rmse = train_final_model(MODEL_NAME, result["best_params"], df, device)
+
+    # Salva risultati
+    save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"], best_rmse)
 
     print("\n" + "=" * 60)
     print("RIEPILOGO FINALE")

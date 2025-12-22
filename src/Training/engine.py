@@ -87,7 +87,14 @@ def create_model(model_name: str, params: dict) -> nn.Module:
             "dropout": params["dropout"],
             "use_cls_token": False,
         }
-        return PatchTST(model_config=model_config)
+        model = PatchTST(model_config=model_config)
+        
+        # Carica pesi pretrained se specificato
+        pretrain_path = params.get("pretrain_path", None)
+        if pretrain_path:
+            model.load_pretrained_encoder(pretrain_path)
+        
+        return model
 
     elif model_name == "tcn":
         from ..ModelClasses import TCN
@@ -102,29 +109,22 @@ def create_model(model_name: str, params: dict) -> nn.Module:
         }
         return TCN(model_config=model_config)
 
+    elif model_name == "encoderlstm":
+        from ..ModelClasses import EncoderLSTM
 
-    elif model_name == "patchtst_finetune":
-        from ..ModelClasses import PatchTSTFinetune
-    
         model_config = {
-            "num_channels": INPUT_SIZE,
-            "target_idx": TARGET_IDX,
-            "lookback": LOOKBACK,
-            "horizon": HORIZON,
-            "patch_length": params["patch_length"],
-            "stride": params["stride"],
-            "d_model": params["d_model"],
-            "n_heads": params["n_heads"],
-            "n_layers": params["n_layers"],
-            "dropout": params["dropout"],
-            "freeze_backbone": params.get("freeze_backbone", False),
+            "pretrain_path": params.get("pretrain_path"),
+            "d_model": params.get("d_model", 128),
+            "lstm_hidden": params.get("lstm_hidden", 64),
+            "lstm_layers": params.get("lstm_layers", 1),
+            "dropout": params.get("dropout", 0.2),
         }
-        return PatchTSTFinetune(model_config=model_config)
+        return EncoderLSTM(model_config=model_config)
 
     else:
         raise ValueError(
             f"Modello '{model_name}' non supportato. "
-            f"Modelli validi: lstm, dlinearm, dlineari, patchtst, tcn, patchtst_finetune"
+            f"Modelli validi: lstm, dlinearm, dlineari, patchtst, tcn, encoderlstm"
         )
 
 
@@ -293,17 +293,30 @@ def fit_model(
     if loss_fn is None:
         loss_fn = nn.MSELoss()
 
-    optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
 
-    if scheduler_kwargs is None:
-        scheduler_kwargs = {
-            "mode": "min",
-            "factor": 0.5,
-            "patience": 3,
-            "min_lr": 1e-6,
-        }
-    scheduler = scheduler_cls(optimizer, **scheduler_kwargs) if scheduler_cls else None
+    # Learning rate differenziato per modelli pretrained
+    if hasattr(model, 'is_pretrained') and model.is_pretrained:
+        # Identifica i parametri dell'encoder
+        if hasattr(model, 'encoder'):
+            # EncoderLSTM: model.encoder
+            encoder_params = set(model.encoder.parameters())
+        elif hasattr(model, 'model') and hasattr(model.model, 'model'):
+            # PatchTST: model.model.model.encoder
+            encoder_params = set(model.model.model.encoder.parameters())
+        else:
+            encoder_params = set()
+        
+        other_params = [p for p in model.parameters() if p not in encoder_params]
+        
+        param_groups = [
+            {"params": list(encoder_params), "lr": lr * 0.1},
+            {"params": other_params, "lr": lr},
+        ]
+        optimizer = optimizer_cls(param_groups, **optimizer_kwargs)
+    else:
+        optimizer = optimizer_cls(model.parameters(), lr=lr, **optimizer_kwargs)
 
+    
     # AMP: crea scaler solo se su CUDA
     use_amp = device.type == "cuda"
     scaler = GradScaler(enabled=use_amp) if use_amp else None
