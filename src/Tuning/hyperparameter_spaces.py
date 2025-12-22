@@ -61,6 +61,7 @@ def get_patchtst_space(trial) -> dict:
         "stride": trial.suggest_categorical("stride", [4, 6, 8, 12]),
         "dropout": trial.suggest_float("dropout", 0.1, 0.3),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth"
     }
 
 
@@ -84,15 +85,34 @@ def get_tcn_space(trial) -> dict:
     }
 
 
+def get_encoderlstm_space(trial) -> dict:
+    """
+    Spazio di ricerca per EncoderLSTM.
+    
+    L'encoder è pretrained e usa LR differenziato automaticamente.
+    Qui ottimizziamo solo i parametri dell'LSTM.
+    """
+    return {
+        "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
+        "d_model": 128,  # Deve matchare l'encoder pretrained
+        "lstm_hidden": trial.suggest_categorical("lstm_hidden", [32, 64, 128]),
+        "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
+        "dropout": trial.suggest_float("dropout", 0.1, 0.4),
+        "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
+    }
+
+
 # =============================================================================
 # REGISTRY - Mapping nome modello -> funzione spazio
 # =============================================================================
 SPACE_REGISTRY = {
     "lstm": get_lstm_space,
     "dlinearm": get_dlinear_space,
-    "dlineari": get_dlinear_space,  # DLinear-I usa stesso spazio di DLinear-M
+    "dlineari": get_dlinear_space,
     "patchtst": get_patchtst_space,
     "tcn": get_tcn_space,
+    "encoderlstm": get_encoderlstm_space,
 }
 
 

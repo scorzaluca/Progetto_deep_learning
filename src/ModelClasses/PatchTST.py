@@ -59,13 +59,16 @@ class PatchTST(nn.Module):
             num_input_channels=self.num_channels,
             num_targets=self.num_channels,
             patch_length=model_config.get("patch_length", 16),
-            stride=model_config.get("stride", 8),
+            patch_stride=model_config.get("stride", 8),
             d_model=model_config.get("d_model", 128),
-            n_heads=model_config.get("n_heads", 4),
-            n_layers=model_config.get("n_layers", 3),
-            dropout=model_config.get("dropout", 0.2),
+            num_attention_heads=model_config.get("n_heads", 4),
+            num_hidden_layers=model_config.get("n_layers", 3),
+            attention_dropout=model_config.get("dropout", 0.2),
+            ff_dropout=model_config.get("dropout", 0.2),
             use_cls_token=model_config.get("use_cls_token", False),
         )
+
+        self.is_pretrained = False
 
         self.model = PatchTSTForPrediction(hf_config)
 
@@ -87,3 +90,30 @@ class PatchTST(nn.Module):
         # Lo slicing [idx : idx + 1] mantiene la dimensione 3D
         target_output = full_output[:, :, self.target_idx : self.target_idx + 1]
         return target_output
+
+
+    def load_pretrained_encoder(self, pretrain_path: str):
+        """
+        Carica i pesi dell'encoder dal pretraining.
+        
+        Usa questo metodo DOPO aver creato il modello e PRIMA di fare fine-tuning.
+        
+        Args:
+            pretrain_path: Percorso al file .pth con i pesi dell'encoder.
+        
+        Example:
+            model = PatchTST(config)
+            model.load_pretrained_encoder("results/pretrained/patchtst_encoder_pretrained.pth")
+            # Ora puoi fare fine-tuning
+        """
+        import torch
+        
+        print(f"Caricamento pesi preaddestrati da: {pretrain_path}")
+        encoder_state = torch.load(pretrain_path, map_location="cpu")
+        
+        # Carica i pesi nell'encoder del modello
+        self.model.model.encoder.load_state_dict(encoder_state, strict=False)
+        
+        self.is_pretrained = True
+        
+        print("Pesi dell'encoder caricati con successo!")
