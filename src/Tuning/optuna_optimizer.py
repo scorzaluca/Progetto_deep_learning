@@ -104,11 +104,7 @@ class OptunaOptimizer:
         scheduler_factor = params.pop("scheduler_factor", 0.5)
         scheduler_patience = params.pop("scheduler_patience", 3)
         scheduler_min_lr = params.pop("scheduler_min_lr", 1e-6)
-
         # params ora contiene solo iperparametri del modello
-
-        # Estrai weight_decay se presente (altrimenti default)
-        weight_decay = params.pop("weight_decay", 0.01)
 
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
@@ -299,14 +295,13 @@ class OptunaOptimizer:
         else:
             fold_indices = list(range(len(self.folds)))
 
-
         weights_to_use = [self.fold_weights[i] for i in fold_indices]
         weight_sum = sum(weights_to_use)
         effective_weights = [
             (self.fold_weights[i] / weight_sum) if i in fold_indices else 0.0
             for i in range(len(self.folds))
         ]
-        
+
         print(
             f"Fold weights: {[f'{w:.3f}' for w in effective_weights]} (samples: {self.train_sample_counts})"
         )
