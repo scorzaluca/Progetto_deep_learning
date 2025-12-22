@@ -71,7 +71,7 @@ def create_model(model_name: str, params: dict) -> nn.Module:
         }
         return DLinearI(model_config=model_config)
 
-    elif model_name == "patchtst":
+    elif model_name == "patchtst" or model_name == "patchtst_finetune":
         from ..ModelClasses import PatchTST
 
         model_config = {
