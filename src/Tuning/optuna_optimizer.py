@@ -93,27 +93,33 @@ class OptunaOptimizer:
 
         # 3. Addestra su ogni fold e raccogli risultati
         mase_scores = []
+        epochs = self.config["epochs"]
 
-        for fold_idx in fold_indices:
+        for i, fold_idx in enumerate(fold_indices):
             train_loader, val_loader, _ = self.folds[fold_idx]
 
             # Crea modello
             model = self._create_model(params)
             model.to(self.device)
 
+            # Calcola epoch_offset per step globale Optuna
+            # Fold 0: step 0-29, Fold 1: step 30-59, Fold 2: step 60-89
+            epoch_offset = i * epochs
+
             # Usa fit_model da engine.py (consolidato)
             _, history, _ = fit_model(
                 model=model,
                 train_loader=train_loader,
                 val_loader=val_loader,
-                epochs=self.config["epochs"],
+                epochs=epochs,
                 lr=lr,
                 device=self.device,
                 fold_idx=fold_idx,
                 patience=self.config["patience"],
-                trial=trial,  # Passa trial per pruning
+                trial=trial,
+                epoch_offset=epoch_offset,
                 grad_clip_norm=grad_clip_norm,
-                verbose=self.verbose,  # Controllato da parametro classe
+                verbose=self.verbose,
             )
 
             # Prendi il miglior MASE dalla history
