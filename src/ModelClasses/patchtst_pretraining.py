@@ -90,6 +90,7 @@ class PatchTSTPretraining(nn.Module):
             outputs = self.model.model(
                 past_values=x,
                 output_hidden_states=True,
+                do_mask_input=False,
             )
             
             # last_hidden_state contiene gli embeddings di tutte le patch
