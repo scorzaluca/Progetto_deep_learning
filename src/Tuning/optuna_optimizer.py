@@ -123,10 +123,28 @@ class OptunaOptimizer:
 
             model = self._create_model(params)
             model.to(self.device)
-
-            optimizer = torch.optim.AdamW(
-                model.parameters(), lr=lr, weight_decay=weight_decay
-            )
+            # LR differenziato per modelli pretrained
+            if hasattr(model, 'is_pretrained') and model.is_pretrained:
+                if hasattr(model, 'encoder'):
+                    # EncoderLSTM
+                    encoder_params = set(model.encoder.parameters())
+                elif hasattr(model, 'model') and hasattr(model.model, 'model'):
+                    # PatchTST con pretrained encoder
+                    encoder_params = set(model.model.model.encoder.parameters())
+                else:
+                    encoder_params = set()
+                
+                other_params = [p for p in model.parameters() if p not in encoder_params]
+                
+                param_groups = [
+                    {"params": list(encoder_params), "lr": lr * 0.1},
+                    {"params": other_params, "lr": lr},
+                ]
+                optimizer = torch.optim.AdamW(param_groups, weight_decay=weight_decay)
+            else:
+                optimizer = torch.optim.AdamW(
+                    model.parameters(), lr=lr, weight_decay=weight_decay
+                )
 
             # Scheduler: riduce LR quando MASE non migliora
             scheduler = ReduceLROnPlateau(
