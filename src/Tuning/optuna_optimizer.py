@@ -286,7 +286,7 @@ class OptunaOptimizer:
             load_if_exists=not new_study,  # Carica se non è nuovo
             direction="minimize",
             sampler=TPESampler(seed=SEED),
-            pruner=MedianPruner(n_startup_trials=5, n_warmup_steps=5),
+            pruner=MedianPruner(n_startup_trials=10, n_warmup_steps=10),
         )
 
         # Calcola trials rimanenti se si riprende

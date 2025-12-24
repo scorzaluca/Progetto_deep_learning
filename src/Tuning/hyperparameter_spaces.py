@@ -86,44 +86,45 @@ def get_tcn_space(trial) -> dict:
     }
 
 def get_patchtst_finetune_space(trial) -> dict:
-    """
-    Spazio di ricerca per PatchTST FINE-TUNING (con encoder pretrained).
-    
-    I parametri architetturali sono FISSI e devono matchare il pretraining.
-    Si ottimizzano solo LR e dropout.
-    """
-    return {
-        "lr": trial.suggest_float("lr", 1e-5, 1e-3, log=True),  # LR più basso per fine-tuning
-        # FISSI - matchano il pretraining
+    # Parametri fissi - li salviamo nel trial per recuperarli dopo
+    fixed_params = {
         "d_model": 128,
         "n_heads": 4,
         "n_layers": 3,
         "patch_length": 16,
         "stride": 8,
-        # OTTIMIZZABILI
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
+    }
+    
+    # Salva i parametri fissi come user_attrs del trial
+    for key, value in fixed_params.items():
+        trial.set_user_attr(key, value)
+    
+    return {
+        "lr": trial.suggest_float("lr", 1e-5, 1e-3, log=True),
+        **fixed_params,  # Li includiamo anche nel return per il training
         "dropout": trial.suggest_float("dropout", 0.1, 0.3),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
-        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth"
     }
 
 
 def get_encoderlstm_space(trial) -> dict:
-    """
-    Spazio di ricerca per EncoderLSTM.
+    fixed_params = {
+        "d_model": 128,
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
+    }
     
-    L'encoder è pretrained e usa LR differenziato automaticamente.
-    Qui ottimizziamo solo i parametri dell'LSTM.
-    """
+    for key, value in fixed_params.items():
+        trial.set_user_attr(key, value)
+    
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
-        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
-        "d_model": 128,  # Deve matchare l'encoder pretrained
+        **fixed_params,
         "lstm_hidden": trial.suggest_categorical("lstm_hidden", [32, 64, 128]),
         "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
     }
-
 
 # =============================================================================
 # REGISTRY - Mapping nome modello -> funzione spazio

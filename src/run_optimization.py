@@ -172,12 +172,13 @@ def main():
     print(f"Best MASE: {result['best_mase']:.4f}")
     print(f"Best params: {result['best_params']}")
 
-    
+    # Recupera parametri fissi salvati nel best trial (se presenti)
+    best_params = {**result["best_params"], **result["study"].best_trial.user_attrs}
     # Retraining finale su tutto il dataset
-    checkpoint_path, best_rmse = train_final_model(MODEL_NAME, result["best_params"], df, device)
-
+    checkpoint_path, best_rmse = train_final_model(MODEL_NAME, best_params, df, device)
+    
     # Salva risultati
-    save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"], best_rmse)
+    save_results(MODEL_NAME, STUDY_NAME, best_params, result["best_mase"], best_rmse)
 
     print("\n" + "=" * 60)
     print("RIEPILOGO FINALE")
