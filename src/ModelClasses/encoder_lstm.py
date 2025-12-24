@@ -44,7 +44,7 @@ class EncoderLSTM(nn.Module):
         
         # 2. LSTM che processa gli embeddings
         self.lstm = nn.LSTM(
-            input_size=self.d_model,
+            input_size=self.d_model*INPUT_SIZE,
             hidden_size=self.lstm_hidden,
             num_layers=self.lstm_layers,
             batch_first=True,
