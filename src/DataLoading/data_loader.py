@@ -24,7 +24,7 @@ class TS_Cross_Validator:
         self.horizon = cfg_dict.get("horizon", 24)
         self.batch_size = cfg_dict.get("batch_size", 64)
         self.step_train = cfg_dict.get("step_train", 1)
-        self.step_val = cfg_dict.get("step_val", 6)
+        self.step_val = cfg_dict.get("step_val", 1)
         self.n_splits = cfg_dict.get("n_splits", 3)
 
         # Custom expanding window splits
@@ -138,7 +138,7 @@ def create_final_train_val_loaders(
     horizon: int = 24,
     batch_size: int = 64,
     step_train: int = 1,
-    step_val: int = 6,
+    step_val: int = 1,
 ):
     """
     Crea train/val DataLoaders per il retraining finale con early stopping.
