@@ -32,6 +32,7 @@ from .config import (
     RESULTS_DIR,
     # Training config
     NAIVE_MAE_FINAL_FOLD,
+    EPOCHS
 )
 from .Tuning import OptunaOptimizer
 from .Utils import set_seed, get_device, load_data_and_folds, save_results
@@ -86,11 +87,11 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
-        epochs=TUNING_EPOCHS,
+        epochs=EPOCHS,
         lr=lr,
         device=device,
         fold_idx=None,  # Non è un fold, usa baseline_mae
-        patience=PATIENCE,
+        patience=10,
         trial=None,  # Nessun pruning Optuna
         optimizer_kwargs={"weight_decay": weight_decay},
         grad_clip_norm=grad_clip_norm,
@@ -172,12 +173,13 @@ def main():
     print(f"Best MASE: {result['best_mase']:.4f}")
     print(f"Best params: {result['best_params']}")
 
-    
+    # Recupera parametri fissi salvati nel best trial (se presenti)
+    best_params = {**result["best_params"], **result["study"].best_trial.user_attrs}
     # Retraining finale su tutto il dataset
-    checkpoint_path, best_rmse = train_final_model(MODEL_NAME, result["best_params"], df, device)
-
+    checkpoint_path, best_rmse = train_final_model(MODEL_NAME, best_params, df, device)
+    
     # Salva risultati
-    save_results(MODEL_NAME, STUDY_NAME, result["best_params"], result["best_mase"], best_rmse)
+    save_results(MODEL_NAME, STUDY_NAME, best_params, result["best_mase"], best_rmse)
 
     print("\n" + "=" * 60)
     print("RIEPILOGO FINALE")

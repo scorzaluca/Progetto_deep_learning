@@ -92,7 +92,8 @@ class PatchTSTPretraining(nn.Module):
                 output_hidden_states=True,
             )
             
-            # last_hidden_state contiene gli embeddings di tutte le patch
-            embeddings = outputs.last_hidden_state
+            hidden = outputs.last_hidden_state
+            batch_size, num_channels, num_patches, d_model = hidden.shape
+            embeddings = hidden.permute(0, 2, 1, 3).reshape(batch_size, num_patches, -1)
             
         return embeddings
