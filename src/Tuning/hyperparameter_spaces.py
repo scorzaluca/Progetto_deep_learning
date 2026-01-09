@@ -17,11 +17,11 @@ def get_lstm_space(trial) -> dict:
     - dropout: regolarizzazione (ignorato se num_layers=1)
     """
     return {
-        "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
-        "hidden_size": trial.suggest_categorical("hidden_size", [32, 64, 128, 256]),
+        "lr": trial.suggest_float("lr", 1e-4, 1e-3, log=True),
+        "hidden_size": trial.suggest_categorical("hidden_size", [64, 128, 256]),
         "num_layers": trial.suggest_int("num_layers", 1, 3),
-        "dropout": trial.suggest_float("dropout", 0.0, 0.5),
-        "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
+        "dropout": trial.suggest_float("dropout", 0.0, 0.3),
+        "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.8, 1.7),
     }
 
 
@@ -61,9 +61,8 @@ def get_patchtst_space(trial) -> dict:
         "stride": trial.suggest_categorical("stride", [4, 6, 8, 12]),
         "dropout": trial.suggest_float("dropout", 0.1, 0.3),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
-        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth"
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
     }
-
 
 
 def get_tcn_space(trial) -> dict:
@@ -85,9 +84,19 @@ def get_tcn_space(trial) -> dict:
         "weight_decay": trial.suggest_float("weight_decay", 1e-5, 1e-2, log=True),
     }
 
+
 def get_patchtst_finetune_space(trial) -> dict:
-    # Parametri fissi - li salviamo nel trial per recuperarli dopo
-    fixed_params = {
+    """
+    Spazio di ricerca per PatchTST FINE-TUNING (con encoder pretrained).
+
+    I parametri architetturali sono FISSI e devono matchare il pretraining.
+    Si ottimizzano solo LR e dropout.
+    """
+    return {
+        "lr": trial.suggest_float(
+            "lr", 1e-5, 1e-3, log=True
+        ),  # LR più basso per fine-tuning
+        # FISSI - matchano il pretraining
         "d_model": 128,
         "n_heads": 4,
         "n_layers": 3,
@@ -95,36 +104,23 @@ def get_patchtst_finetune_space(trial) -> dict:
         "stride": 8,
         "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
     }
-    
-    # Salva i parametri fissi come user_attrs del trial
-    for key, value in fixed_params.items():
-        trial.set_user_attr(key, value)
-    
-    return {
-        "lr": trial.suggest_float("lr", 1e-5, 1e-3, log=True),
-        **fixed_params,  # Li includiamo anche nel return per il training
-        "dropout": trial.suggest_float("dropout", 0.1, 0.3),
-        "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
-    }
 
 
 def get_encoderlstm_space(trial) -> dict:
-    fixed_params = {
-        "d_model": 128,
-        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
-    }
-    
-    for key, value in fixed_params.items():
-        trial.set_user_attr(key, value)
-    
+    """
+    Spazio di ricerca per EncoderLSTM.
+
+    L'encoder è pretrained e usa LR differenziato automaticamente.
+    Qui ottimizziamo solo i parametri dell'LSTM.
+    """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
-        **fixed_params,
         "lstm_hidden": trial.suggest_categorical("lstm_hidden", [32, 64, 128]),
         "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
     }
+
 
 # =============================================================================
 # REGISTRY - Mapping nome modello -> funzione spazio

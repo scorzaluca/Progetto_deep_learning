@@ -14,8 +14,8 @@ MODEL_NAME = "encoderlstm"
 # =============================================================================
 N_TRIALS = 50  # Numero di trial Optuna
 N_FOLDS = 3  # 1 = solo fold più grande (idx 2), 2 o 3 = più fold
-EPOCHS = 20  # Epoche massime per trial
-PATIENCE = 4  # Early stopping patience
+EPOCHS = 50  # Epoche massime per trial
+PATIENCE = 8  # Early stopping patience
 
 # =============================================================================
 # GESTIONE STUDIO OPTUNA
@@ -26,7 +26,7 @@ STUDY_NAME = "encoderlstm_48_run_1"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)
-NEW_STUDY = True
+NEW_STUDY = False
 
 # =============================================================================
 # PERCORSI

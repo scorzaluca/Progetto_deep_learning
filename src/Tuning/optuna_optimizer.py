@@ -2,6 +2,8 @@
 OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi e obiettivi.
 VERSIONE SEQUENZIALE SENZA PRUNING.
+Gestisce la creazione di studi e obiettivi.
+VERSIONE SEQUENZIALE SENZA PRUNING.
 """
 
 import optuna

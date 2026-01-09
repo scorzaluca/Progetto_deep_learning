@@ -26,6 +26,8 @@ EPOCHS = 50
 LEARNING_RATE = 0.001
 
 # --- BENCHMARK (per MASE) ---
+# NOTA: I validation set sono identici per expanding e sliding windows,
+# quindi il MAE naive è lo stesso per entrambe le strategie.
 NAIVE_MAE_PER_FOLD = [0.06228089907571026, 0.08621430409181377, 0.06193031994221003]
 
 # MAE del modello naive sul final training fold (22 mesi train + 2 mesi val)
