@@ -119,6 +119,8 @@ def get_encoderlstm_space(trial) -> dict:
         "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
+        "d_model": 128,
+        "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
     }
 
 
