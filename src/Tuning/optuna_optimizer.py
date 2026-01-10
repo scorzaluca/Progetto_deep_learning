@@ -11,7 +11,7 @@ from optuna.samplers import TPESampler
 import torch
 
 from .hyperparameter_spaces import get_hyperparameter_space
-from ..Training.engine import fit_model, create_model
+from ..Training.engine import create_model, fit_model
 from ..config import SEED
 
 
@@ -67,46 +67,36 @@ class OptunaOptimizer:
     def _objective(self, trial: Trial) -> float:
         """
         Funzione obiettivo per Optuna (SEQUENZIALE, SENZA PRUNING).
-
         Addestra il modello su ogni fold completamente in sequenza,
         poi calcola la media ponderata MASE alla fine.
-
         Args:
             trial: oggetto Optuna Trial
-
         Returns:
             float: media ponderata del miglior MASE sui fold
         """
         # 1. Genera iperparametri (tutti opzionali hanno fallback default)
         params = get_hyperparameter_space(self.model_name, trial)
-
         # Parametri di training (estratti con fallback default)
         lr = params.pop("lr")
         grad_clip_norm = params.pop("grad_clip_norm", 1.0)
         weight_decay = params.pop("weight_decay", 0.001)
-
         # Parametri scheduler (opzionali, con default come fit_model)
         scheduler_factor = params.pop("scheduler_factor", 0.5)
         scheduler_patience = params.pop("scheduler_patience", 3)
         scheduler_min_lr = params.pop("scheduler_min_lr", 1e-6)
         # params ora contiene solo iperparametri del modello
-
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
         if n_folds_to_use == 1:
             fold_indices = [2] if len(self.folds) > 2 else [len(self.folds) - 1]
         else:
             fold_indices = list(range(len(self.folds)))
-
         # 3. Addestra su ogni fold SEQUENZIALMENTE
         mase_scores = []
-
         for fold_idx in fold_indices:
             train_loader, val_loader, _ = self.folds[fold_idx]
-
             model = self._create_model(params)
             model.to(self.device)
-
             # Usa fit_model da engine.py (SENZA trial per disabilitare pruning interno)
             _, history, _ = fit_model(
                 model=model,
@@ -128,17 +118,14 @@ class OptunaOptimizer:
                     "min_lr": scheduler_min_lr,
                 },
             )
-
             best_mase = min(history["val_mase"])
             mase_scores.append(best_mase)
-
         # 4. Calcola media ponderata MASE (usa pesi pre-calcolati)
         weights_to_use = [self.fold_weights[i] for i in fold_indices]
         weight_sum = sum(weights_to_use)
         weighted_mase = sum(
             (w / weight_sum) * mase for w, mase in zip(weights_to_use, mase_scores)
         )
-
         return weighted_mase
 
     def optimize(
@@ -180,7 +167,7 @@ class OptunaOptimizer:
             load_if_exists=not new_study,  # Carica se non è nuovo
             direction="minimize",
             sampler=TPESampler(seed=SEED),
-            pruner=NopPruner(),  # NESSUN PRUNING
+            pruner=NopPruner(),
         )
 
         # Calcola trials rimanenti se si riprende
