@@ -1,6 +1,6 @@
 import optuna
 
-DB_PATH = "sqlite:///results/optuna_studies.db"
+DB_PATH = "sqlite:///results/optuna_backup.db"
 
 studies = optuna.get_all_study_names(storage=DB_PATH)
 print("Studi:", studies)
@@ -11,3 +11,5 @@ for name in studies:
     print(f"\n{name}: {len(completed)} trial COMPLETATI (su {len(study.trials)} totali)")
     if completed:
         print(f"  Miglior MASE: {study.best_value:.4f}")
+
+
