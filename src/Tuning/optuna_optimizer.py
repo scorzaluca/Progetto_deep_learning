@@ -14,6 +14,9 @@ from .hyperparameter_spaces import get_hyperparameter_space
 from ..Training.engine import create_model, fit_model
 from ..config import SEED
 
+import os
+import shutil
+
 
 class OptunaOptimizer:
     """
@@ -51,6 +54,11 @@ class OptunaOptimizer:
         self.train_sample_counts = [len(fold[0].dataset) for fold in folds]
         total_samples = sum(self.train_sample_counts)
         self.fold_weights = [n / total_samples for n in self.train_sample_counts]
+
+    def _save_callback(self, study, trial):
+        """Callback che salva il DB dopo ogni trial su Kaggle."""
+        if os.path.exists('/kaggle/working'):
+            shutil.copy('results/optuna_studies.db', '/kaggle/working/optuna_backup.db')
 
     def _create_model(self, params: dict):
         """
@@ -209,7 +217,7 @@ class OptunaOptimizer:
 
         if remaining_trials > 0:
             study.optimize(
-                self._objective, n_trials=remaining_trials, show_progress_bar=True
+                self._objective, n_trials=remaining_trials, show_progress_bar=True, callbacks=[self._save_callback]
             )
         else:
             print("Tutti i trial già completati. Nessuna ottimizzazione necessaria.")
