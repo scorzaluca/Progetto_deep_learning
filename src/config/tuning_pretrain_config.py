@@ -13,7 +13,7 @@ PATIENCE = 8  # Early stopping patience
 # =============================================================================
 # GESTIONE STUDIO OPTUNA
 # =============================================================================
-STUDY_NAME = "patchtst_pretrain_v1"
+STUDY_NAME = "patchtst_pretrain_48"
 NEW_STUDY = True  # True = nuovo studio, False = riprendi esistente
 
 # =============================================================================
