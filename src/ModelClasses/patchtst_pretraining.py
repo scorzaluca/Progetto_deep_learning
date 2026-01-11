@@ -10,7 +10,7 @@ from ..config import LOOKBACK, INPUT_SIZE
 class PatchTSTPretraining(nn.Module):
     """
     Wrapper per PatchTSTForPretraining di HuggingFace.
-    
+
     Questo modello impara a ricostruire patch mascherate della sequenza.
     NON fa forecasting, serve solo per il pretraining.
     """
@@ -24,35 +24,37 @@ class PatchTSTPretraining(nn.Module):
         # Parametri dal config
         self.num_channels = model_config.get("num_channels", INPUT_SIZE)
         self.lookback = model_config.get("lookback", LOOKBACK)
+        self.mask_ratio = model_config.get("mask_ratio", 0.4)
 
         # Config HuggingFace per PRETRAINING
         hf_config = PatchTSTConfig(
             num_input_channels=self.num_channels,
             context_length=self.lookback,
-            
             # Parametri architettura (come PatchTST normale)
             patch_length=model_config.get("patch_length", 16),
-            patch_stride=model_config.get("stride", 8),           # ← CORRETTO: patch_stride
+            patch_stride=model_config.get("stride", 8),
             d_model=model_config.get("d_model", 128),
             num_attention_heads=model_config.get("n_heads", 4),
             num_hidden_layers=model_config.get("n_layers", 3),
-            attention_dropout=model_config.get("dropout", 0.2),   # ← CORRETTO: tipo specifico
+            attention_dropout=model_config.get("dropout", 0.2),
             ff_dropout=model_config.get("dropout", 0.2),
             # PARAMETRI SPECIFICI PER PRETRAINING
-            mask_type="random",           # Maschera patch a caso
-            random_mask_ratio=0.4,        # 40% delle patch mascherate
+            mask_type="random",
+            random_mask_ratio=self.mask_ratio,
         )
 
         # Modello per pretraining (NON PatchTSTForPrediction!)
         self.model = PatchTSTForPretraining(hf_config)
-        
-        print(f"PatchTSTPretraining - Channels: {self.num_channels}, "
-              f"Lookback: {self.lookback}, Mask ratio: 40%")
+
+        print(
+            f"PatchTSTPretraining - Channels: {self.num_channels}, "
+            f"Lookback: {self.lookback}, Mask ratio: {self.mask_ratio:.0%}"
+        )
 
     def forward(self, x):
         """
         Forward pass per pretraining.
-        
+
         Input x: (Batch, Lookback, Num_Channels)
         Output: loss di ricostruzione (MSE tra patch originali e ricostruite)
         """
@@ -70,20 +72,20 @@ class PatchTSTPretraining(nn.Module):
     def get_embeddings(self, x):
         """
         Estrae le rappresentazioni latenti dall'encoder (senza masking).
-        
+
         Utile per usare l'encoder come feature extractor per altri modelli.
-        
+
         Args:
             x: Input tensor di shape (batch, lookback, num_channels)
                Es: (64, 48, 24)
-        
+
         Returns:
-            embeddings: Tensor di shape (batch, n_patches, d_model)
-                        Es: (64, 5, 128)
+            embeddings: Tensor di shape (batch, n_patches, d_model * num_channels)
+                        Es: (64, 5, 3072) con d_model=128, num_channels=24
                         Dove n_patches dipende da patch_length e stride
         """
         self.model.eval()  # Modalità inference
-        
+
         with torch.no_grad():
             # Ottieni gli hidden states dall'encoder
             # do_mask_input=False evita il masking (vogliamo TUTTI i dati)
@@ -91,9 +93,9 @@ class PatchTSTPretraining(nn.Module):
                 past_values=x,
                 output_hidden_states=True,
             )
-            
+
             hidden = outputs.last_hidden_state
             batch_size, num_channels, num_patches, d_model = hidden.shape
             embeddings = hidden.permute(0, 2, 1, 3).reshape(batch_size, num_patches, -1)
-            
+
         return embeddings

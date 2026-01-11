@@ -1,7 +1,4 @@
 """
-Script per esportare i risultati degli studi Optuna in un file Excel.
-Salva il file in src/optuna_results.xlsx
-"""
 import optuna
 import pandas as pd
 from pathlib import Path
@@ -10,7 +7,7 @@ DB_PATH = "sqlite:///results/optuna_studies.db"
 OUTPUT_PATH = Path(__file__).parent / "optuna_results.xlsx"
 
 def get_study_data():
-    """Raccoglie tutti i dati degli studi dal database Optuna."""
+    
     studies = optuna.get_all_study_names(storage=DB_PATH)
     
     if not studies:
@@ -80,3 +77,17 @@ if __name__ == "__main__":
 
 
 
+"""
+
+
+import optuna
+
+DB_PATH = "sqlite:///results/optuna_studies.db"
+
+studies = optuna.get_all_study_names(storage=DB_PATH)
+print("Studi trovati:", studies)
+
+for name in studies:
+    study = optuna.load_study(study_name=name, storage=DB_PATH)
+    completed = len([t for t in study.trials if t.state.name == "COMPLETE"])
+    print(f"  - {name}: {completed} trial completati (su {len(study.trials)} totali)")

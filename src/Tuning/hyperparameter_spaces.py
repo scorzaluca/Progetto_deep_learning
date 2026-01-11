@@ -124,7 +124,7 @@ def get_encoderlstm_space(trial) -> dict:
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
         "d_model": 128,
         "pretrain_path": "results/pretrained/patchtst_encoder_pretrained.pth",
-        "freeze_encoder": True
+        "freeze_encoder": False
     }
 
 
