@@ -2,8 +2,6 @@
 OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
 Gestisce la creazione di studi e obiettivi.
 VERSIONE SEQUENZIALE SENZA PRUNING.
-Gestisce la creazione di studi e obiettivi.
-VERSIONE SEQUENZIALE SENZA PRUNING.
 """
 
 import optuna
@@ -22,7 +20,6 @@ class OptunaOptimizer:
     Gestisce l'ottimizzazione degli iperparametri per un singolo modello.
     Versione sequenziale: addestra ogni fold completamente prima del successivo.
     """
-
 
     def __init__(
         self,
