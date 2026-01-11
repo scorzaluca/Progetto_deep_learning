@@ -1,6 +1,6 @@
 import optuna
 
-DB_PATH = "sqlite:///results/optuna_studies_definitivo.db"
+DB_PATH = "sqlite:///results/optuna_studies.db"
 
 studies = optuna.get_all_study_names(storage=DB_PATH)
 print("Studi:", studies)
