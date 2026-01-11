@@ -111,10 +111,13 @@ def get_encoderlstm_space(trial) -> dict:
     Spazio di ricerca per EncoderLSTM.
 
     L'encoder è pretrained e usa LR differenziato automaticamente.
-    Qui ottimizziamo solo i parametri dell'LSTM.
+    Qui ottimizziamo i parametri della proiezione e dell'LSTM.
     """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
+        "projection_dim": trial.suggest_categorical(
+            "projection_dim", [32, 64, 128, 256]
+        ),
         "lstm_hidden": trial.suggest_categorical("lstm_hidden", [32, 64, 128]),
         "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),

@@ -27,6 +27,9 @@ class EncoderLSTM(nn.Module):
         # Parametri
         self.pretrain_path = model_config.get("pretrain_path")
         self.d_model = model_config.get("d_model", 128)
+        self.projection_dim = model_config.get(
+            "projection_dim", 64
+        )  # Tunabile con Optuna
         self.lstm_hidden = model_config.get("lstm_hidden", 64)
         self.lstm_layers = model_config.get("lstm_layers", 1)
         self.dropout = model_config.get("dropout", 0.2)
@@ -44,15 +47,14 @@ class EncoderLSTM(nn.Module):
         # Congela l'encoder
         self.is_pretrained = True if self.pretrain_path else False
 
-        # 2. Layer di proiezione: riduce da (d_model * num_channels) a d_model
+        # 2. Layer di proiezione: riduce da (d_model * num_channels) a projection_dim
         # Questo layer IMPARA come combinare le rappresentazioni dei diversi canali
-        # invece di fare una media arbitraria (che non avrebbe senso semantico)
         self.embedding_dim = self.d_model * INPUT_SIZE  # 128 * 24 = 3072
-        self.projection = nn.Linear(self.embedding_dim, self.d_model)
+        self.projection = nn.Linear(self.embedding_dim, self.projection_dim)
 
         # 3. LSTM che processa gli embeddings proiettati
         self.lstm = nn.LSTM(
-            input_size=self.d_model,  # 128 invece di 3072
+            input_size=self.projection_dim,  # Dimensione tunabile
             hidden_size=self.lstm_hidden,
             num_layers=self.lstm_layers,
             batch_first=True,
@@ -63,7 +65,7 @@ class EncoderLSTM(nn.Module):
         self.head = nn.Linear(self.lstm_hidden, HORIZON)
 
         print(
-            f"EncoderLSTM - embedding_dim: {self.embedding_dim} → projected: {self.d_model}, "
+            f"EncoderLSTM - embedding: {self.embedding_dim} → projection: {self.projection_dim}, "
             f"lstm_hidden: {self.lstm_hidden}, layers: {self.lstm_layers}"
         )
 
