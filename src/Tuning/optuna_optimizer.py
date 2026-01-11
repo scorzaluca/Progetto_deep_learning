@@ -24,7 +24,6 @@ class OptunaOptimizer:
     Versione sequenziale: addestra ogni fold completamente prima del successivo.
     """
 
-
     def __init__(
         self,
         model_name: str,

@@ -7,11 +7,13 @@ L'encoder estrae embeddings dalle sequenze, l'LSTM li processa per la previsione
 import torch
 import torch.nn as nn
 from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
+from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
 
 
 class EncoderLSTM(nn.Module):
     """
     Combina un encoder PatchTST pretrained (congelato) con un LSTM.
+
 
     Flusso:
     1. Input X passa attraverso l'encoder → embeddings
@@ -22,11 +24,16 @@ class EncoderLSTM(nn.Module):
     def __init__(self, model_config: dict):
         super().__init__()
 
+
         from .patchtst_pretraining import PatchTSTPretraining
+
 
         # Parametri
         self.pretrain_path = model_config.get("pretrain_path")
         self.d_model = model_config.get("d_model", 128)
+        self.projection_dim = model_config.get(
+            "projection_dim", 64
+        )  # Tunabile con Optuna
         self.lstm_hidden = model_config.get("lstm_hidden", 64)
         self.lstm_layers = model_config.get("lstm_layers", 1)
         self.dropout = model_config.get("dropout", 0.2)
@@ -44,15 +51,14 @@ class EncoderLSTM(nn.Module):
         # Congela l'encoder
         self.is_pretrained = bool(self.pretrain_path) and not self.freeze_encoder
 
-        # 2. Layer di proiezione: riduce da (d_model * num_channels) a d_model
+        # 2. Layer di proiezione: riduce da (d_model * num_channels) a projection_dim
         # Questo layer IMPARA come combinare le rappresentazioni dei diversi canali
-        # invece di fare una media arbitraria (che non avrebbe senso semantico)
         self.embedding_dim = self.d_model * INPUT_SIZE  # 128 * 24 = 3072
-        self.projection = nn.Linear(self.embedding_dim, self.d_model)
+        self.projection = nn.Linear(self.embedding_dim, self.projection_dim)
 
         # 3. LSTM che processa gli embeddings proiettati
         self.lstm = nn.LSTM(
-            input_size=self.d_model,  # 128 invece di 3072
+            input_size=self.projection_dim,  # Dimensione tunabile
             hidden_size=self.lstm_hidden,
             num_layers=self.lstm_layers,
             batch_first=True,
@@ -60,10 +66,12 @@ class EncoderLSTM(nn.Module):
         )
 
         # 4. Head per la previsione
+
+        # 4. Head per la previsione
         self.head = nn.Linear(self.lstm_hidden, HORIZON)
 
         print(
-            f"EncoderLSTM - embedding_dim: {self.embedding_dim} → projected: {self.d_model}, "
+            f"EncoderLSTM - embedding: {self.embedding_dim} → projection: {self.projection_dim}, "
             f"lstm_hidden: {self.lstm_hidden}, layers: {self.lstm_layers}"
         )
 
@@ -94,12 +102,18 @@ class EncoderLSTM(nn.Module):
         lstm_out, _ = self.lstm(embeddings)  # (batch, n_patches, lstm_hidden)
 
         # 4. Usa l'ultimo output per la previsione
+
+        # 4. Usa l'ultimo output per la previsione
         last_out = lstm_out[:, -1, :]  # (batch, lstm_hidden)
+
+        # 5. Proietta su horizon
 
         # 5. Proietta su horizon
         predictions = self.head(last_out)  # (batch, horizon)
 
+
         # 5. Reshape per compatibilità con altri modelli
         predictions = predictions.unsqueeze(-1)  # (batch, horizon, 1)
+
 
         return predictions
