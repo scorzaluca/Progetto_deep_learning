@@ -50,6 +50,9 @@ __all__ = [
     "PATCHTST_CONFIG",
     "TCN_CONFIG",
     "NAIVE_CONFIG",
+    "ENCODER_WEIGHTS_PATH",
+    "FREEZE_ENCODER",
+    "D_MODEL",
     # Training config
     "TARGET_COL",
     "SAMPLING_CONFIG",
@@ -68,5 +71,5 @@ __all__ = [
     "NEW_STUDY",
     "DATA_PATH",
     "RESULTS_DIR",
-    "ENCODER_WEIGHTS_PATH",
+
 ]
