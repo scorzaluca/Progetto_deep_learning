@@ -34,6 +34,7 @@ from .tuning_config import (
     NEW_STUDY,
     DATA_PATH,
     RESULTS_DIR,
+    ENCODER_WEIGHTS_PATH,
 )
 
 __all__ = [
@@ -65,4 +66,5 @@ __all__ = [
     "NEW_STUDY",
     "DATA_PATH",
     "RESULTS_DIR",
+    "ENCODER_WEIGHTS_PATH",
 ]
