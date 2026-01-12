@@ -38,10 +38,10 @@ PATCHTST_CONFIG = {
     "num_channels": INPUT_SIZE,
     "target_idx": TARGET_IDX,
     "patch_length": 16,
-    "stride": 8,
+    "stride": 4,
     "d_model": 128,
-    "n_heads": 4,
-    "n_layers": 3,
+    "n_heads": 8,
+    "n_layers": 4,
     "dropout": 0.2,
     "use_cls_token": False,
 }
