@@ -119,6 +119,7 @@ def create_model(model_name: str, params: dict) -> nn.Module:
             "lstm_hidden": params.get("lstm_hidden", 64),
             "lstm_layers": params.get("lstm_layers", 1),
             "dropout": params.get("dropout", 0.2),
+            "freeze_encoder": params.get("freeze_encoder", False),
         }
         return EncoderLSTM(model_config=model_config)
 

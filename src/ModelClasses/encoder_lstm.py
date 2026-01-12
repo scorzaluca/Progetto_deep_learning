@@ -7,7 +7,7 @@ L'encoder estrae embeddings dalle sequenze, l'LSTM li processa per la previsione
 import torch
 import torch.nn as nn
 from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
-from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
+
 
 
 class EncoderLSTM(nn.Module):
@@ -47,6 +47,9 @@ class EncoderLSTM(nn.Module):
             self.encoder.model.model.encoder.load_state_dict(
                 encoder_state, strict=False
             )
+            if self.freeze_encoder:
+                for param in self.encoder.parameters():
+                    param.requires_grad = False
 
         # Congela l'encoder
         self.is_pretrained = bool(self.pretrain_path) and not self.freeze_encoder
@@ -65,7 +68,7 @@ class EncoderLSTM(nn.Module):
             dropout=self.dropout if self.lstm_layers > 1 else 0,
         )
 
-        # 4. Head per la previsione
+        
 
         # 4. Head per la previsione
         self.head = nn.Linear(self.lstm_hidden, HORIZON)
