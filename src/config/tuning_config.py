@@ -6,7 +6,7 @@ Modifica questi parametri manualmente prima di ogni run di ottimizzazione.
 # =============================================================================
 # MODELLO DA OTTIMIZZARE
 # =============================================================================
-# Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn"
+# Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn", "encoderlstm"
 MODEL_NAME = "encoderlstm"
 
 # =============================================================================
@@ -22,7 +22,7 @@ PATIENCE = 8  # Early stopping patience
 # =============================================================================
 # Nome dello studio (usato per salvare/riprendere)
 # Cambia questo nome per ogni nuova ottimizzazione dello stesso modello
-STUDY_NAME = "encoderlstm_48_run_2"
+STUDY_NAME = "encoderlstm_24"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)
