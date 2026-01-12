@@ -12,6 +12,9 @@ from .model_config import (
     PATCHTST_CONFIG,
     TCN_CONFIG,
     NAIVE_CONFIG,
+    ENCODER_WEIGHTS_PATH,
+    FREEZE_ENCODER,
+    D_MODEL,
 )
 
 from .training_config import (
@@ -34,7 +37,6 @@ from .tuning_config import (
     NEW_STUDY,
     DATA_PATH,
     RESULTS_DIR,
-    ENCODER_WEIGHTS_PATH,
 )
 
 __all__ = [
