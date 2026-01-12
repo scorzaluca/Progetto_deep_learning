@@ -62,9 +62,7 @@ NAIVE_CONFIG = {
     "horizon": HORIZON,
 }
 
-
 # --- EncoderLSTM ---
-
-ENCODER_WEIGHTS_PATH ="results/pretrained/patchtst_pretrain_48_encoder.pth"
+ENCODER_WEIGHTS_PATH = "results/pretrained/patchtst_pretrain_48_encoder.pth"
 FREEZE_ENCODER = False
 D_MODEL = 128
