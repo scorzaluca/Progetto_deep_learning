@@ -44,6 +44,9 @@ class EncoderLSTM(nn.Module):
             self.encoder.model.model.encoder.load_state_dict(
                 encoder_state, strict=False
             )
+            if self.freeze_encoder:
+                for param in self.encoder.parameters():
+                    param.requires_grad = False
 
         # Congela l'encoder
         self.is_pretrained = bool(self.pretrain_path) and not self.freeze_encoder

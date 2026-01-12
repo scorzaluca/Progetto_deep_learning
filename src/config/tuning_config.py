@@ -33,6 +33,3 @@ NEW_STUDY = False
 # =============================================================================
 DATA_PATH = "data/processed/preprocessed_ds.csv"
 RESULTS_DIR = "./results/"
-
-# Path ai pesi dell'encoder pretrained (usato da EncoderLSTM)
-ENCODER_WEIGHTS_PATH = "results/pretrained/patchtst_pretrained_24_encoder.pth"

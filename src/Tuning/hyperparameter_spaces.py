@@ -113,7 +113,7 @@ def get_encoderlstm_space(trial) -> dict:
     L'encoder è pretrained e usa LR differenziato automaticamente.
     Qui ottimizziamo i parametri della proiezione e dell'LSTM.
     """
-    from ..config import ENCODER_WEIGHTS_PATH
+    from ..config import ENCODER_WEIGHTS_PATH, D_MODEL, FREEZE_ENCODER
 
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
@@ -122,9 +122,9 @@ def get_encoderlstm_space(trial) -> dict:
         "lstm_layers": trial.suggest_int("lstm_layers", 1, 3),
         "dropout": trial.suggest_float("dropout", 0.1, 0.4),
         "grad_clip_norm": trial.suggest_float("grad_clip_norm", 0.5, 2.0),
-        "d_model": 128,
+        "d_model": D_MODEL,
         "pretrain_path": ENCODER_WEIGHTS_PATH,
-        "freeze_encoder": False
+        "freeze_encoder": FREEZE_ENCODER
     }
 
 
