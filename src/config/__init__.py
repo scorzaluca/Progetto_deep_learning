@@ -53,6 +53,9 @@ __all__ = [
     "ENCODER_WEIGHTS_PATH",
     "FREEZE_ENCODER",
     "D_MODEL",
+    "ENCODER_WEIGHTS_PATH",
+    "FREEZE_ENCODER",
+    "D_MODEL",
     # Training config
     "TARGET_COL",
     "SAMPLING_CONFIG",
