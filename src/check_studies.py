@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
 import optuna
 
-DB_PATH = "sqlite:///results/optuna_studies.db"
+DB_PATH = "sqlite:///results/optuna_studies_colab_completo.db"
 
 studies = optuna.get_all_study_names(storage=DB_PATH)
 print("Studi trovati:", studies)
