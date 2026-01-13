@@ -113,7 +113,9 @@ def create_model(model_name: str, params: dict) -> nn.Module:
         from ..ModelClasses import EncoderLSTM
 
         model_config = {
-            "pretrain_path": params.get("pretrain_path"),
+            "pretrain_path": params.get(
+                "pretrain_path", "results/pretrained/patchtst_pretrain_24_encoder.pth"
+            ),
             "d_model": params.get("d_model", 128),
             "projection_dim": params.get("projection_dim", 64),
             "lstm_hidden": params.get("lstm_hidden", 64),

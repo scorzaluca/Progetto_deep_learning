@@ -56,8 +56,8 @@ class OptunaOptimizer:
 
     def _save_callback(self, study, trial):
         """Callback che salva il DB dopo ogni trial su Kaggle."""
-        if os.path.exists('/kaggle/working'):
-            shutil.copy('results/optuna_studies.db', '/kaggle/working/optuna_backup.db')
+        if os.path.exists("/kaggle/working"):
+            shutil.copy("results/optuna_studies.db", "/kaggle/working/optuna_backup.db")
 
     def _create_model(self, params: dict):
         """
@@ -84,14 +84,23 @@ class OptunaOptimizer:
         """
         # 1. Genera iperparametri (tutti opzionali hanno fallback default)
         params = get_hyperparameter_space(self.model_name, trial)
+
         # Parametri di training (estratti con fallback default)
         lr = params.pop("lr")
         grad_clip_norm = params.pop("grad_clip_norm", 1.0)
         weight_decay = params.pop("weight_decay", 0.001)
+
         # Parametri scheduler (opzionali, con default come fit_model)
         scheduler_factor = params.pop("scheduler_factor", 0.5)
         scheduler_patience = params.pop("scheduler_patience", 3)
         scheduler_min_lr = params.pop("scheduler_min_lr", 1e-6)
+
+        # Salva parametri fissi (non suggeriti da Optuna) come user_attrs
+        # Questi verranno recuperati in run_optimization.py per il retraining
+        for key, value in params.items():
+            if key not in trial.params:  # Non è un parametro suggerito
+                trial.set_user_attr(key, value)
+
         # params ora contiene solo iperparametri del modello
         # 2. Determina quali fold usare
         n_folds_to_use = self.config["n_folds"]
@@ -216,7 +225,10 @@ class OptunaOptimizer:
 
         if remaining_trials > 0:
             study.optimize(
-                self._objective, n_trials=remaining_trials, show_progress_bar=True, callbacks=[self._save_callback]
+                self._objective,
+                n_trials=remaining_trials,
+                show_progress_bar=True,
+                callbacks=[self._save_callback],
             )
         else:
             print("Tutti i trial già completati. Nessuna ottimizzazione necessaria.")
