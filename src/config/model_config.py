@@ -4,7 +4,7 @@ Contiene i parametri di default per ogni architettura.
 """
 
 # Parametri temporali condivisi
-LOOKBACK = 24  # Quante ore guardo indietro (Input X)
+LOOKBACK = 72  # Quante ore guardo indietro (Input X)
 HORIZON = 24  # Quante ore prevedo avanti (Target Y)
 
 # --- PARAMETRI DERIVATI DAL DATASET ---
@@ -43,7 +43,7 @@ PATCHTST_CONFIG = {
     "d_model": 128,
     "n_heads": 4,
     "n_layers": 3,
-    "dropout": 0.1,
+    "dropout": 0.0,
     "use_cls_token": False,
 }
 

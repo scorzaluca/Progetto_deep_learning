@@ -14,6 +14,7 @@ Il flusso:
 6. Salva checkpoint .pth
 """
 
+from src.config import LOOKBACK
 import os
 import torch
 import pandas as pd
@@ -32,7 +33,7 @@ from .config import (
     RESULTS_DIR,
     # Training config
     NAIVE_MAE_FINAL_FOLD,
-    EPOCHS
+    EPOCHS,
 )
 from .Tuning import OptunaOptimizer
 from .Utils import set_seed, get_device, load_data_and_folds, save_results
@@ -62,7 +63,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
 
     # Crea train/val loaders (22 mesi train, 2 mesi val con early stopping)
     train_loader, val_loader, scaler = create_final_train_val_loaders(
-        df, target_col=TARGET_COL
+        df, TARGET_COL, LOOKBACK
     )
 
     # Crea modello
@@ -79,7 +80,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     scheduler_patience = best_params.get("scheduler_patience", 3)
     scheduler_min_lr = best_params.get("scheduler_min_lr", 1e-6)
 
-    print(f"Training {model_name.upper()} con early stopping (patience={PATIENCE})...")
+    print(f"Training {model_name.upper()} con early stopping (patience=10)...")
 
     # Usa fit_model con early stopping (stessa logica dell'ottimizzazione)
     # Passa baseline_mae direttamente invece di fold_idx per il final training
@@ -87,7 +88,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
-        epochs=EPOCHS,
+        epochs=100,
         lr=lr,
         device=device,
         fold_idx=None,  # Non è un fold, usa baseline_mae
@@ -112,7 +113,9 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     # Salva checkpoint
     checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, f"{STUDY_NAME}.pth")
+    checkpoint_path = os.path.join(
+        checkpoint_dir, f"{STUDY_NAME}_100_epochs_10_patience.pth"
+    )
 
     torch.save(model.state_dict(), checkpoint_path)
     print(f"\nCheckpoint salvato: {checkpoint_path}")
@@ -177,7 +180,7 @@ def main():
     best_params = {**result["best_params"], **result["study"].best_trial.user_attrs}
     # Retraining finale su tutto il dataset
     checkpoint_path, best_rmse = train_final_model(MODEL_NAME, best_params, df, device)
-    
+
     # Salva risultati
     save_results(MODEL_NAME, STUDY_NAME, best_params, result["best_mase"], best_rmse)
 
