@@ -54,6 +54,7 @@ def create_model(model_name: str, params: dict) -> nn.Module:
 
         model_config = {
             "input_size": INPUT_SIZE,
+            "target_idx": TARGET_IDX,  # Necessario per estrarre pv_power dall'output
             "lookback": LOOKBACK,
             "horizon": HORIZON,
             "kernel_size": params["kernel_size"],
@@ -114,7 +115,7 @@ def create_model(model_name: str, params: dict) -> nn.Module:
 
         model_config = {
             "pretrain_path": params.get(
-                "pretrain_path", "results/pretrained/patchtst_pretrain_24_encoder.pth"
+                "pretrain_path", "results/pretrained/patchtst_pretrain_48_encoder.pth"
             ),
             "d_model": params.get("d_model", 128),
             "projection_dim": params.get("projection_dim", 64),

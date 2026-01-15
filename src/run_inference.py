@@ -34,11 +34,11 @@ from .Utils import set_seed, get_device
 # =============================================================================
 TRAIN_DATA_PATH = "data/processed/preprocessed_ds.csv"
 TEST_DATA_PATH = (
-    "data/processed/merge_ds.xlsx"
+    "data/processed/merged_test_ds.csv"
     # "data/test/test_data.xlsx"  # Modifica questo con il path dei dati di test
 )
-CHECKPOINT_PATH = "results/checkpoints/encoderlstm_24_giusto_100_epochs_10_patience.pth"
-PARAMS_PATH = "results/params/encoderlstm_24_giusto_params.json"
+CHECKPOINT_PATH = "results/checkpoints/encoderlstm_48_final_100_epochs.pth"
+PARAMS_PATH = "results/params/encoderlstm_48_100_epochs_params.json"
 MODEL_NAME = "encoderlstm"
 
 

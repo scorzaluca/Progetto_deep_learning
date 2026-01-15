@@ -4,7 +4,7 @@ Contiene i parametri di default per ogni architettura.
 """
 
 # Parametri temporali condivisi
-LOOKBACK = 24  # Quante ore guardo indietro (Input X) - DEVE matchare il pretraining!
+LOOKBACK = 48  # Quante ore guardo indietro (Input X) - DEVE matchare il pretraining!
 HORIZON = 24  # Quante ore prevedo avanti (Target Y)
 
 # --- PARAMETRI DERIVATI DAL DATASET ---
@@ -38,12 +38,12 @@ DLINEAR_CONFIG = {
 PATCHTST_CONFIG = {
     "num_channels": INPUT_SIZE,
     "target_idx": TARGET_IDX,
-    "patch_length": 12,  # Deve matchare il pretraining!
+    "patch_length": 16,  # 12 Deve matchare il pretraining!
     "stride": 4,  # Deve matchare il pretraining!
     "d_model": 128,
-    "n_heads": 4,
-    "n_layers": 3,
-    "dropout": 0.0,
+    "n_heads": 8,  # 4
+    "n_layers": 4,  # 3
+    "dropout": 0.2,
     "use_cls_token": False,
 }
 
