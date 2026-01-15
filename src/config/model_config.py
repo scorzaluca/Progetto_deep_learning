@@ -4,7 +4,7 @@ Contiene i parametri di default per ogni architettura.
 """
 
 # Parametri temporali condivisi
-LOOKBACK = 72  # Quante ore guardo indietro (Input X)
+LOOKBACK = 24  # Quante ore guardo indietro (Input X) - DEVE matchare il pretraining!
 HORIZON = 24  # Quante ore prevedo avanti (Target Y)
 
 # --- PARAMETRI DERIVATI DAL DATASET ---

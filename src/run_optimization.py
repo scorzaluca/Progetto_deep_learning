@@ -88,7 +88,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
-        epochs=100,
+        epochs=EPOCHS,
         lr=lr,
         device=device,
         fold_idx=None,  # Non è un fold, usa baseline_mae

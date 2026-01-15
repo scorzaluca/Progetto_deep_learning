@@ -25,6 +25,7 @@ from .training_config import (
     LEARNING_RATE,
     NAIVE_MAE_PER_FOLD,
     NAIVE_MAE_FINAL_FOLD,
+    NAIVE_MAE_TEST,
 )
 
 from .tuning_config import (
@@ -53,9 +54,6 @@ __all__ = [
     "ENCODER_WEIGHTS_PATH",
     "FREEZE_ENCODER",
     "D_MODEL",
-    "ENCODER_WEIGHTS_PATH",
-    "FREEZE_ENCODER",
-    "D_MODEL",
     # Training config
     "TARGET_COL",
     "SAMPLING_CONFIG",
@@ -64,6 +62,7 @@ __all__ = [
     "LEARNING_RATE",
     "NAIVE_MAE_PER_FOLD",
     "NAIVE_MAE_FINAL_FOLD",
+    "NAIVE_MAE_TEST",
     # Tuning config
     "MODEL_NAME",
     "N_TRIALS",

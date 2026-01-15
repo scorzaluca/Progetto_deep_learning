@@ -209,3 +209,60 @@ def create_final_train_val_loaders(
     print(f"Val:   {len(val_range)} rows -> {len(val_dataset)} samples")
 
     return train_loader, val_loader, scaler
+
+
+def create_test_loader(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    target_col: str,
+    lookback: int = 24,
+    horizon: int = 24,
+    batch_size: int = 64,
+):
+    """
+    Crea DataLoader per il test set con scaler fittato su tutti i dati di training.
+
+    IMPORTANTE: Lo scaler viene fittato su TUTTO il training data (train+val originali),
+    non solo sul train set. Questo è il modo corretto per fare inferenza su dati nuovi.
+
+    Args:
+        train_df: DataFrame con TUTTI i dati di training (22+2 mesi = tutto il dataset originale)
+        test_df: DataFrame con i dati di test (già preprocessati)
+        target_col: nome colonna target
+        lookback: finestra di input
+        horizon: finestra di output
+        batch_size: dimensione batch
+
+    Returns:
+        Tuple[DataLoader, MinMaxScaler]: test_loader, scaler (per denormalizzazione)
+    """
+    # Fit scaler su TUTTO il training data
+    scaler = MinMaxScaler()
+    scaler.fit(train_df)
+
+    # Transform test data
+    test_scaled = scaler.transform(test_df)
+    test_scaled_df = pd.DataFrame(
+        test_scaled, columns=test_df.columns, index=test_df.index
+    )
+
+    # Crea dataset
+    test_dataset = PVForecastDataset(
+        test_scaled_df, target_col, lookback, horizon, step=1
+    )
+
+    # Crea DataLoader
+    use_pin_memory = torch.cuda.is_available()
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        pin_memory=use_pin_memory,
+        num_workers=0,
+    )
+
+    print("\n=== TEST DATA LOADER ===")
+    print(f"Test: {len(test_df)} rows -> {len(test_dataset)} samples")
+
+    return test_loader, scaler

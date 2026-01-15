@@ -22,7 +22,7 @@ SAMPLING_CONFIG = {
 
 # --- TRAINING ---
 SEED = 42
-EPOCHS = 50
+EPOCHS = 100
 LEARNING_RATE = 0.001
 
 # --- BENCHMARK (per MASE) ---
@@ -32,3 +32,7 @@ NAIVE_MAE_PER_FOLD = [0.06228089907571026, 0.08621430409181377, 0.06193031994221
 
 # MAE del modello naive sul final training fold (22 mesi train + 2 mesi val)
 NAIVE_MAE_FINAL_FOLD = 0.04919686427582865
+
+# MAE del modello naive sul test set (da calcolare con naive_run.ipynb)
+# Questo valore verrà aggiornato dopo aver ricevuto i dati di test
+NAIVE_MAE_TEST = 0.06746598157732592  # TODO: Calcolare con naive_run.ipynb sul test set
