@@ -33,7 +33,7 @@ from .config import (
     RESULTS_DIR,
     # Training config
     NAIVE_MAE_FINAL_FOLD,
-    EPOCHS
+    EPOCHS,
 )
 from .Tuning import OptunaOptimizer
 from .Utils import set_seed, get_device, load_data_and_folds, save_results
@@ -63,7 +63,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
 
     # Crea train/val loaders (22 mesi train, 2 mesi val con early stopping)
     train_loader, val_loader, scaler = create_final_train_val_loaders(
-        df, TARGET_COL,LOOKBACK
+        df, TARGET_COL, LOOKBACK
     )
 
     # Crea modello
@@ -178,7 +178,7 @@ def main():
     best_params = {**result["best_params"], **result["study"].best_trial.user_attrs}
     # Retraining finale su tutto il dataset
     checkpoint_path, best_rmse = train_final_model(MODEL_NAME, best_params, df, device)
-    
+
     # Salva risultati
     save_results(MODEL_NAME, STUDY_NAME, best_params, result["best_mase"], best_rmse)
 

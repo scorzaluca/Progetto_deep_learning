@@ -54,6 +54,7 @@ def create_model(model_name: str, params: dict) -> nn.Module:
 
         model_config = {
             "input_size": INPUT_SIZE,
+            "target_idx": TARGET_IDX,  # Necessario per estrarre pv_power dall'output
             "lookback": LOOKBACK,
             "horizon": HORIZON,
             "kernel_size": params["kernel_size"],
