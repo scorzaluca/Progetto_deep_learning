@@ -9,6 +9,7 @@ import torch.nn as nn
 from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
 
 
+
 class EncoderLSTM(nn.Module):
     """
     Combina un encoder PatchTST pretrained (congelato) con un LSTM.
@@ -23,7 +24,9 @@ class EncoderLSTM(nn.Module):
     def __init__(self, model_config: dict):
         super().__init__()
 
+
         from .patchtst_pretraining import PatchTSTPretraining
+
 
         # Parametri
         self.pretrain_path = model_config.get("pretrain_path")
@@ -64,6 +67,9 @@ class EncoderLSTM(nn.Module):
             batch_first=True,
             dropout=self.dropout if self.lstm_layers > 1 else 0,
         )
+
+        
+
         # 4. Head per la previsione
         self.head = nn.Linear(self.lstm_hidden, HORIZON)
 
@@ -99,10 +105,15 @@ class EncoderLSTM(nn.Module):
         lstm_out, _ = self.lstm(embeddings)  # (batch, n_patches, lstm_hidden)
 
         # 4. Usa l'ultimo output per la previsione
+
+        # 4. Usa l'ultimo output per la previsione
         last_out = lstm_out[:, -1, :]  # (batch, lstm_hidden)
 
         # 5. Proietta su horizon
+
+        # 5. Proietta su horizon
         predictions = self.head(last_out)  # (batch, horizon)
+
 
         # 5. Reshape per compatibilità con altri modelli
         predictions = predictions.unsqueeze(-1)  # (batch, horizon, 1)

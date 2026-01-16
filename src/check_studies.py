@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
 import optuna
 
-DB_PATH = "sqlite:///results/optuna_studies_colab_completo.db"
+DB_PATH = "sqlite:///results/optuna_studies.db"
 
 studies = optuna.get_all_study_names(storage=DB_PATH)
 print("Studi trovati:", studies)
@@ -91,3 +91,8 @@ for name in studies:
     study = optuna.load_study(study_name=name, storage=DB_PATH)
     completed = len([t for t in study.trials if t.state.name == "COMPLETE"])
     print(f"  - {name}: {completed} trial completati (su {len(study.trials)} totali)")
+    
+    if completed > 0:
+        best_trial = study.best_trial
+        print(f"    ✅ Miglior MASE: {study.best_value:.4f} (Trial #{best_trial.number})")
+        print(f"    📋 Best params: {best_trial.params}")
