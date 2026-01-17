@@ -1,35 +1,36 @@
 """
-Configurazione per l'ottimizzazione degli iperparametri.
-Modifica questi parametri manualmente prima di ogni run di ottimizzazione.
+Hyperparameter Tuning Configuration.
+
+Manually modify these parameters before each optimization run.
 """
 
 # =============================================================================
-# MODELLO DA OTTIMIZZARE
+# MODEL TO OPTIMIZE
 # =============================================================================
-# Opzioni: "lstm", "dlinearm", "dlineari", "patchtst", "tcn", "encoderlstm"
-MODEL_NAME = "dlinearm"
+# Options: "lstm", "dlinearm", "dlineari", "patchtst", "tcn", "encoderlstm"
+MODEL_NAME = "encoderlstm"
 
 # =============================================================================
-# PARAMETRI OTTIMIZZAZIONE
+# OPTIMIZATION PARAMETERS
 # =============================================================================
-N_TRIALS = 30  # Numero di trial Optuna
-N_FOLDS = 3  # 1 = solo fold più grande (idx 2), 2 o 3 = più fold
-EPOCHS = 50  # Epoche massime per trial
+N_TRIALS = 30  # Number of Optuna trials
+N_FOLDS = 3  # 1 = largest fold only (idx 2), 2 or 3 = multiple folds
+EPOCHS = 50  # Maximum epochs per trial
 PATIENCE = 8  # Early stopping patience
 
 # =============================================================================
-# GESTIONE STUDIO OPTUNA
+# OPTUNA STUDY MANAGEMENT
 # =============================================================================
-# Nome dello studio (usato per salvare/riprendere)
-# Cambia questo nome per ogni nuova ottimizzazione dello stesso modello
+# Study Name (used for saving/resuming)
+# Change this name for each new optimization run of the same model
 STUDY_NAME = "encoderlstm_48_run_3"
 
-# Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
-# Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)
+# If True, creates a new study (deletes existing study with same name)
+# If False, resumes existing study (to continue interrupted optimization)
 NEW_STUDY = False
 
 # =============================================================================
-# PERCORSI
+# PATHS
 # =============================================================================
 DATA_PATH = "data/processed/preprocessed_ds.csv"
 RESULTS_DIR = "./results/"

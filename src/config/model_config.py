@@ -1,27 +1,28 @@
 """
-Configurazione dei modelli di deep learning.
-Contiene i parametri di default per ogni architettura.
+Deep Learning Models Configuration.
+
+Contains default parameters for each model architecture.
 """
 
-# Parametri temporali condivisi
-LOOKBACK = 48  # Quante ore guardo indietro (Input X)
-HORIZON = 24  # Quante ore prevedo avanti (Target Y)
+# Shared Temporal Parameters
+LOOKBACK = 48  # Lookback window size (Input X)
+HORIZON = 24  # Forecast horizon size (Target Y)
 
-# --- PARAMETRI DERIVATI DAL DATASET ---
-# Calcolati dal notebook compute_params.ipynb sul dataset preprocessed_ds.csv
-# Dopo drop di weather_description_other (dummy trap)
-INPUT_SIZE = 24  # Numero di feature nel dataset (colonne)
-TARGET_IDX = 23  # Indice della colonna pv_power (target)
+# --- DATASET DERIVED PARAMETERS ---
+# Calculated via compute_params.ipynb on preprocessed_ds.csv
+# After dropping weather_description_other (dummy trap)
+INPUT_SIZE = 24  # Number of features in the dataset (columns)
+TARGET_IDX = 23  # Index of the pv_power column (target)
 
 # --- LSTM ---
-# bidirectional processa il lookback in entrambe le direzioni (valido per forecasting)
+# Bidirectional processes lookback in both directions
 LSTM_CONFIG = {
     "input_size": INPUT_SIZE,
     "hidden_size": 64,
     "output_size": HORIZON,
     "num_layers": 1,
     "dropout": 0.0,
-    "bidirectional": False,  # True raddoppia hidden_size, spesso non migliora molto
+    "bidirectional": False, # True doubles hidden_size
 }
 
 # --- DLinear ---
@@ -34,12 +35,12 @@ DLINEAR_CONFIG = {
 }
 
 # --- PatchTST ---
-# NOTA: Questi parametri DEVONO matchare quelli usati nel pretraining per EncoderLSTM
+# These parameters MUST match those used in pretraining for EncoderLSTM
 PATCHTST_CONFIG = {
     "num_channels": INPUT_SIZE,
     "target_idx": TARGET_IDX,
-    "patch_length": 16,  # Deve matchare il pretraining!
-    "stride": 4,  # Deve matchare il pretraining!
+    "patch_length": 16,  
+    "stride": 4,  
     "d_model": 128,
     "n_heads": 8,
     "n_layers": 4,

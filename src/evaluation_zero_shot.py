@@ -1,5 +1,9 @@
 """
-Script per valutare modelli zero-shot usando la stessa metodologia dello screening.
+Script to evaluate Zero-Shot models using the same methodology as the main screening.
+
+This script isolates the validation logic for models that do not require training (like Chronos).
+It ensures fair comparison by using the exact same Data Loading, customized Cross-Validation,
+and Metric Calculation (MASE) as the trained models.
 """
 
 import json
@@ -13,11 +17,11 @@ from .DataLoading import TS_Cross_Validator
 from .ModelClasses import ChronosWrapper
 from .Utils import plot_predictions
 
-# Configurazione
-FOLD_INDEX = 2  # Stesso fold dello screening (il più grande)
+# Configuration
+FOLD_INDEX = 2 
 DATA_PATH = "data/processed/preprocessed_ds.csv"
 
-# Modelli zero-shot da valutare
+# Models to evaluate
 MODELS_TO_EVALUATE = {
     "chronos-2": ChronosWrapper,
 }
@@ -25,28 +29,32 @@ MODELS_TO_EVALUATE = {
 
 def load_data_and_fold():
     """
-    Carica dati e seleziona fold 2 (come screening).
+    Loads the preprocessed dataset and retrieves the specific Cross-Validation fold.
+
+    We aim to evaluate on the SAME exact data split used during the screening of trained models
+    to ensure the results are directly comparable.
 
     Returns:
-        tuple: (train_loader, val_loader, scaler) per il fold selezionato
+        tuple: (train_loader, val_loader, scaler) for the selected fold.
     """
-    print(f"\nCaricamento dataset: {DATA_PATH}")
+    print(f"\nLoading dataset: {DATA_PATH}")
     df = pd.read_csv(DATA_PATH)
     print(f"Dataset shape: {df.shape}")
 
-    # Crea cross-validator
+    # Initialize Cross-Validator with the same config as training
     validator = TS_Cross_Validator(df, target_col=TARGET_COL, cfg_dict=SAMPLING_CONFIG)
     folds = list(validator.get_folds())
 
-    # Seleziona fold 2 (stesso dello screening)
+    # Verify that the requested fold exists
     if len(folds) <= FOLD_INDEX:
         raise ValueError(
-            f"Fold {FOLD_INDEX} non disponibile. Totale fold: {len(folds)}"
+            f"Fold {FOLD_INDEX} not available. Total folds: {len(folds)}"
         )
 
+    # Extract the loaders and scaler for the target fold
     train_loader, val_loader, scaler = folds[FOLD_INDEX]
 
-    print(f"\nFold {FOLD_INDEX + 1} selezionato:")
+    print(f"\nFold {FOLD_INDEX + 1} selected:")
     print(f"  Train batches: {len(train_loader)}")
     print(f"  Val batches: {len(val_loader)}")
     print(f"  Baseline MAE (Naive): {NAIVE_MAE_PER_FOLD[FOLD_INDEX]:.6f}")
@@ -56,113 +64,141 @@ def load_data_and_fold():
 
 def evaluate_model(wrapper, val_loader, scaler, device, fold_idx, model_name):
     """
-    Valuta un modello zero-shot sul validation set.
-    IDENTICO alla logica di optuna_optimizer.py righe 155-166.
+    Evaluates a Zero-Shot model on the validation set.
+
+    It replicates the logic used in `optuna_optimizer.py` to ensure consistency.
+    1. Iterates over validation batches.
+    2. Generates predictions using the wrapper (which handles context).
+    3. Computes MAE and MASE.
+    4. Plots the results.
 
     Args:
-        wrapper: Wrapper del modello zero-shot
-        val_loader: DataLoader per validazione (SOLO VALIDATION!)
-        device: torch.device (cuda/cpu)
-        fold_idx: Indice del fold (per baseline MAE)
+        wrapper: Zero-shot model wrapper (e.g., ChronosWrapper).
+        val_loader: DataLoader for validation (used for iteration and context).
+        scaler: Scaler used for denormalization (for plotting).
+        device: torch.device (cuda/cpu).
+        fold_idx: Index of the fold (used to retrieve baseline MAE).
+        model_name: Name of the model (for plot title).
 
     Returns:
-        float: MASE score
+        float: MASE score.
     """
-    # MAE function e baseline
+    # Initialize metric function and retrieve baseline
     mae_fn = nn.L1Loss()
     baseline_mae = NAIVE_MAE_PER_FOLD[fold_idx]
 
-    print(f"\n  Inferenza su validation set ({len(val_loader)} batch)...")
+    print(f"\n  Inference on validation set ({len(val_loader)} batches)...")
     running_mae = 0.0
 
     all_preds = []
     all_targets = []
 
+    # Get target column index for denormalization
     target_idx = val_loader.dataset.target_col_idx
 
     with torch.no_grad():
         for batch_idx, (batch_x, batch_y) in enumerate(val_loader):
-            # Passa batch_x e batch_y al device
+            # Move data to device
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
 
-            # Predizione zero-shot (passa val_loader per target_col_idx)
+            # Zero-Shot Prediction
+            # We pass `val_loader` because ChronosWrapper needs access to the 
+            # dataset context (history) to generate forecasts, not just the current batch_x.
             pred = wrapper.predict(batch_x, horizon=24, val_loader=val_loader)
             pred = pred.to(device)
 
-            # Calcola MAE
+            # Calculate MAE
             running_mae += mae_fn(pred, batch_y).item()
 
+            # Store predictions and targets for plotting (take first feature/step)
             all_preds.append(pred[:, 0, 0].cpu().numpy())
             all_targets.append(batch_y[:, 0, 0].cpu().numpy())
 
-            # Progress ogni 50 batch
+            # Log progress every 50 batches
             if (batch_idx + 1) % 50 == 0:
                 print(f"    Batch {batch_idx + 1}/{len(val_loader)}")
 
+    # Calculate aggregate metrics
     avg_mae = running_mae / len(val_loader)
     mase = avg_mae / baseline_mae
 
     print(f"  MAE: {avg_mae:.6f}")
     print(f"  MASE: {mase:.4f}")
 
-    # Concatena e denormalizza per plot
+    # Concatenate results for plotting
     preds_flat = np.concatenate(all_preds)
     targets_flat = np.concatenate(all_targets)
 
-    # Denormalizza (target è l'unica colonna, usa inverse_transform parziale)
-    # Crea array dummy per inverse_transform
+    # --- Denormalization for Plotting ---
+    # We need to invert the scaling to get real units (Watts).
+    # Since scaler expects shape (N, n_features), we create dummy arrays
+    # and fill only the target column.
     n_features = scaler.n_features_in_
     preds_full = np.zeros((len(preds_flat), n_features))
     targets_full = np.zeros((len(targets_flat), n_features))
+    
+    # Fill the target column
     preds_full[:, target_idx] = preds_flat
     targets_full[:, target_idx] = targets_flat
 
+    # Inverse transform and extract target column back
     preds_denorm = scaler.inverse_transform(preds_full)[:, target_idx]
     targets_denorm = scaler.inverse_transform(targets_full)[:, target_idx]
 
+    # Generate and save prediction plots
     plot_predictions(preds_denorm, targets_denorm, model_name, fold_idx, RESULTS_DIR)
 
     return mase
 
 
 def main():
+    """
+    Main execution loop for Zero-Shot evaluation.
+
+    Steps:
+    1. Sets up the computation device (CUDA/CPU).
+    2. Loads the validation fold and scaler.
+    3. Iterates through all Zero-Shot models defined in MODELS_TO_EVALUATE.
+    4. Runs evaluation for each model using `evaluate_model`.
+    5. Aggregates results, creates a ranking, and saves everything to a JSON file.
+    """
     print("\n" + "=" * 70)
-    print("ZERO-SHOT MODEL EVALUATION (SCREENING METHODOLOGY)")
+    print("ZERO-SHOT MODEL EVALUATION")
     print("=" * 70)
 
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nDevice: {device}")
 
-    # Carica dati (NOTA: usiamo solo val_loader!)
+    # Load Data (we only need val_loader for Zero-Shot evaluation)
     _, val_loader, scaler = load_data_and_fold()
 
-    # Risultati
+    # Dictionary to store results
     results = {}
 
-    # Evalua ogni modello
+    # Iterate over each Zero-Shot model defined in MODELS_TO_EVALUATE
     for model_name, wrapper_class in MODELS_TO_EVALUATE.items():
         print(f"\n{'=' * 70}")
         print(f"EVALUATING: {model_name.upper()}")
         print(f"{'=' * 70}")
 
         try:
-            # Istanzia wrapper
-            print(f"\nCaricamento modello {model_name}...")
+            # Instantiate the Wrapper
+            print(f"\nLoading model {model_name}...")
             wrapper = wrapper_class()
 
-            # Ottieni info modello
+            # Retrieve Model Info (Parameters, Architecture)
             model_info = wrapper.get_model_info()
-            print(f"  Tipo: {model_info.get('model_type', 'N/A')}")
-            print(f"  Parametri: {model_info.get('parameters', 'N/A')}")
+            print(f"  Type: {model_info.get('model_type', 'N/A')}")
+            print(f"  Parameters: {model_info.get('parameters', 'N/A')}")
 
-            # Valuta (SOLO SU VAL_LOADER!)
+            # Evaluate (ONLY ON VAL_LOADER!)
             mase = evaluate_model(
                 wrapper, val_loader, scaler, device, FOLD_INDEX, model_name
             )
 
-            # Salva risultati
+            # Save Results
             results[model_name] = {
                 "best_mase": float(mase),
                 "model_info": model_info,
@@ -172,7 +208,7 @@ def main():
             print(f"\n✓ {model_name.upper()}: MASE = {mase:.4f}")
 
         except Exception as e:
-            print(f"\n✗ {model_name.upper()}: ERRORE - {str(e)}")
+            print(f"\n✗ {model_name.upper()}: ERROR - {str(e)}")
             import traceback
 
             traceback.print_exc()
@@ -182,12 +218,14 @@ def main():
                 "error": str(e),
             }
 
-    # Crea ranking
+    # Create Ranking
+    # Filter out failed models (infinite MASE)
     valid_models = [m for m in results.keys() if results[m]["best_mase"] < float("inf")]
+    # Sort by MASE (ascending)
     ranking = sorted(valid_models, key=lambda m: results[m]["best_mase"])
     results["ranking"] = ranking
 
-    # Salva risultati
+    # Save to JSON
     import os
 
     os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -196,7 +234,7 @@ def main():
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
 
-    # Print summary
+    # Print Final Summary
     print("\n" + "=" * 70)
     print("EVALUATION COMPLETED")
     print("=" * 70)
@@ -206,7 +244,7 @@ def main():
             mase = results[model]["best_mase"]
             print(f"  {i}. {model}: MASE = {mase:.4f}")
 
-    print(f"\nRisultati salvati in: {results_path}")
+    print(f"\nResults saved to: {results_path}")
     print("=" * 70 + "\n")
 
 

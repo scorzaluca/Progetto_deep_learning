@@ -1,28 +1,29 @@
 """
-Configurazione per l'ottimizzazione degli iperparametri del pretraining PatchTST.
-Modifica questi parametri manualmente prima di ogni run.
+Hyperparameter Optimization Configuration for PatchTST Pretraining.
+
+Manually modify these parameters before each pretraining run.
 """
 
 # =============================================================================
-# PARAMETRI OTTIMIZZAZIONE
+# OPTIMIZATION PARAMETERS
 # =============================================================================
-N_TRIALS = 30  # Numero di trial Optuna
-EPOCHS = 50  # Epoche massime per trial
+N_TRIALS = 30  # Number of Optuna trials
+EPOCHS = 50  # Maximum epochs per trial
 PATIENCE = 8  # Early stopping patience
 
 # =============================================================================
-# GESTIONE STUDIO OPTUNA
+# OPTUNA STUDY MANAGEMENT
 # =============================================================================
 STUDY_NAME = "patchtst_pretrain_48"
-NEW_STUDY = True  # True = nuovo studio, False = riprendi esistente
+NEW_STUDY = True  # True = New Study, False = Resume Existing Study
 
 # =============================================================================
-# SPLIT DATI
+# DATA SPLIT
 # =============================================================================
-VAL_SPLIT = 0.2  # 80% train, 20% validation (temporale, no shuffle)
+VAL_SPLIT = 0.2  # 80% Training, 20% Validation (Temporal, No Shuffle)
 
 # =============================================================================
-# PERCORSI
+# PATHS
 # =============================================================================
 DATA_PATH = "data/processed/preprocessed_ds.csv"
 RESULTS_DIR = "./results/"
