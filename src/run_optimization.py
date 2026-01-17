@@ -88,7 +88,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
-        epochs=EPOCHS,
+        epochs=100,
         lr=lr,
         device=device,
         fold_idx=None,  # Non è un fold, usa baseline_mae
@@ -113,9 +113,7 @@ def train_final_model(model_name: str, best_params: dict, df: pd.DataFrame, devi
     # Salva checkpoint
     checkpoint_dir = os.path.join(RESULTS_DIR, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(
-        checkpoint_dir, f"{STUDY_NAME}_100_epochs_10_patience.pth"
-    )
+    checkpoint_path = os.path.join(checkpoint_dir, f"{STUDY_NAME}_100_epochs.pth")
 
     torch.save(model.state_dict(), checkpoint_path)
     print(f"\nCheckpoint salvato: {checkpoint_path}")

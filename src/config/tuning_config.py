@@ -22,7 +22,7 @@ PATIENCE = 8  # Early stopping patience
 # =============================================================================
 # Nome dello studio (usato per salvare/riprendere)
 # Cambia questo nome per ogni nuova ottimizzazione dello stesso modello
-STUDY_NAME = "dlinearm_48_1_1_n"
+STUDY_NAME = "encoderlstm_48_run_3"
 
 # Se True, crea un nuovo studio (cancella eventuale studio esistente con stesso nome)
 # Se False, riprende lo studio esistente (per continuare ottimizzazione interrotta)

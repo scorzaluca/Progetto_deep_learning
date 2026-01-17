@@ -1,9 +1,3 @@
-"""
-OptunaOptimizer: Classe per l'ottimizzazione degli iperparametri con Optuna.
-Gestisce la creazione di studi e obiettivi.
-VERSIONE SEQUENZIALE SENZA PRUNING.
-"""
-
 import optuna
 from optuna.trial import Trial
 from optuna.pruners import NopPruner
@@ -20,8 +14,20 @@ import shutil
 
 class OptunaOptimizer:
     """
-    Gestisce l'ottimizzazione degli iperparametri per un singolo modello.
-    Versione sequenziale: addestra ogni fold completamente prima del successivo.
+    Manages hyperparameter optimization for a single model using Optuna.
+
+    Sequential Version:
+    It trains the model on each Cross-Validation fold sequentially (one after the other).
+    This ensures that each trial is fully evaluated on all folds before moving to the next trial,
+    providing a robust estimate of performance (Average MASE).
+
+    Args:
+            model_name: Name of the model to optimize (e.g., "lstm", "patchtst").
+            folds: List of tuples (train_loader, val_loader, scaler) for Cross-Validation.
+            device: Torch device (cuda/cpu).
+            config: Dictionary containing 'n_trials', 'n_folds', 'patience', 'epochs'.
+            storage_path: Path to the SQLite database for persistence (optional).
+            verbose: If True, prints debug messages during optimization.
     """
 
     def __init__(
@@ -33,15 +39,7 @@ class OptunaOptimizer:
         storage_path: str = None,
         verbose: bool = False,
     ):
-        """
-        Args:
-            model_name: nome del modello ("lstm", "dlinearm", "dlineari", "patchtst", "tcn")
-            folds: lista di tuple (train_loader, val_loader, scaler)
-            device: torch device (cuda/cpu)
-            config: dizionario con n_trials, n_folds, patience, epochs
-            storage_path: percorso del database SQLite per persistenza
-            verbose: se True, stampa messaggi di debug
-        """
+        
         self.model_name = model_name.lower()
         self.folds = folds
         self.device = device
@@ -49,72 +47,96 @@ class OptunaOptimizer:
         self.storage_path = storage_path
         self.verbose = verbose
 
-        # Pre-calcola i pesi dei fold (basati sul numero di campioni di training)
+        # Pre-calculate Fold weights based on number of training samples
+        # (This is useful if folds are unbalanced)
         self.train_sample_counts = [len(fold[0].dataset) for fold in folds]
         total_samples = sum(self.train_sample_counts)
         self.fold_weights = [n / total_samples for n in self.train_sample_counts]
 
     def _save_callback(self, study, trial):
-        """Callback che salva il DB dopo ogni trial su Kaggle."""
+        """
+        Callback to save the Optuna DB after each trial.
+        
+        This is specifically for Kaggle/Colab environments where the working directory
+        might be ephemeral, so we back up the DB to a safe location.
+        """
         if os.path.exists("/kaggle/working"):
             shutil.copy("results/optuna_studies.db", "/kaggle/working/optuna_backup.db")
 
     def _create_model(self, params: dict):
         """
-        Crea un'istanza del modello con i parametri specificati.
-        Utilizza la factory function create_model() da engine.py.
+        Helper method to instantiate the model using the factory function from engine.py.
 
         Args:
-            params: dizionario iperparametri
+            params: Dictionary of hyperparameters.
 
         Returns:
-            nn.Module: istanza del modello
+            nn.Module: Instantiated PyTorch model.
         """
         return create_model(self.model_name, params)
 
     def _objective(self, trial: Trial) -> float:
         """
-        Funzione obiettivo per Optuna (SEQUENZIALE, SENZA PRUNING).
-        Addestra il modello su ogni fold completamente in sequenza,
-        poi calcola la media ponderata MASE alla fine.
+        Optuna Objective Function (SEQUENTIAL, NO PRUNING).
+
+        This function is called by Optuna for every Trial.
+        It trains the model on each Cross-Validation fold sequentially,
+        and then returns the average performance (Weighted MASE).
+
         Args:
-            trial: oggetto Optuna Trial
+            trial: Optuna Trial object used to sample hyperparameters.
+
         Returns:
-            float: media ponderata del miglior MASE sui fold
+            float: Weighted average MASE across all folds.
         """
-        # 1. Genera iperparametri (tutti opzionali hanno fallback default)
+        # Hyperparameter Sampling
+        # Get the search space for the current model
         params = get_hyperparameter_space(self.model_name, trial)
 
-        # Parametri di training (estratti con fallback default)
+        # Extract training-specific parameters (popping them removes them from model params dict)
         lr = params.pop("lr")
         grad_clip_norm = params.pop("grad_clip_norm", 1.0)
         weight_decay = params.pop("weight_decay", 0.001)
 
-        # Parametri scheduler (opzionali, con default come fit_model)
+        # Extract Scheduler parameters
         scheduler_factor = params.pop("scheduler_factor", 0.5)
         scheduler_patience = params.pop("scheduler_patience", 3)
         scheduler_min_lr = params.pop("scheduler_min_lr", 1e-6)
 
-        # Salva parametri fissi (non suggeriti da Optuna) come user_attrs
-        # Questi verranno recuperati in run_optimization.py per il retraining
+        # Log Fixed Parameters (User Attributes)
+        # Optuna only tracks 'suggested' parameters by default.
+        # We manually add fixed parameters (e.g., d_model=128 in finetuning) to the trial user_attrs
+        # so they are saved in the DB and we can retrieve them later for retraining.
         for key, value in params.items():
-            if key not in trial.params:  # Non è un parametro suggerito
+            if key not in trial.params:  # If it wasn't sampled by Optuna
                 trial.set_user_attr(key, value)
 
-        # params ora contiene solo iperparametri del modello
-        # 2. Determina quali fold usare
+        # 'params' now contains ONLY the model arguments
+
+        # Fold Selection
+        # Determine which folds to use
         n_folds_to_use = self.config["n_folds"]
         if n_folds_to_use == 1:
+            # If we only want 1 fold (fast debug), pick the last one
             fold_indices = [2] if len(self.folds) > 2 else [len(self.folds) - 1]
         else:
+            # Use all available folds
             fold_indices = list(range(len(self.folds)))
-        # 3. Addestra su ogni fold SEQUENZIALMENTE
+
+        # Sequential Training Loop
         mase_scores = []
+        
         for fold_idx in fold_indices:
+            # Retrieve data for this fold
             train_loader, val_loader, _ = self.folds[fold_idx]
+            
+            # Create a fresh model instance (weights initialized from scratch)
             model = self._create_model(params)
             model.to(self.device)
-            # Usa fit_model da engine.py (SENZA trial per disabilitare pruning interno)
+
+            # Train the model using the standard engine
+            # We pass `trial=None` to disable internal pruning in fit_model.
+            # In this Sequential approach, we want to finish the training to get a solid metric.
             _, history, _ = fit_model(
                 model=model,
                 train_loader=train_loader,
@@ -124,7 +146,7 @@ class OptunaOptimizer:
                 device=self.device,
                 fold_idx=fold_idx,
                 patience=self.config["patience"],
-                trial=None,  # NESSUN PRUNING
+                trial=None,  # DISABLE INTERNAL PRUNING
                 optimizer_kwargs={"weight_decay": weight_decay},
                 grad_clip_norm=grad_clip_norm,
                 verbose=self.verbose,
@@ -135,76 +157,86 @@ class OptunaOptimizer:
                     "min_lr": scheduler_min_lr,
                 },
             )
+            
+            # Get best validation score for this fold
             best_mase = min(history["val_mase"])
             mase_scores.append(best_mase)
-        # 4. Calcola media ponderata MASE (usa pesi pre-calcolati)
+
+        # Weighted Average Calculation
+        # Calculate the final objective value (Weighted MASE)
         weights_to_use = [self.fold_weights[i] for i in fold_indices]
         weight_sum = sum(weights_to_use)
+        
         weighted_mase = sum(
             (w / weight_sum) * mase for w, mase in zip(weights_to_use, mase_scores)
         )
+        
         return weighted_mase
 
     def optimize(
         self, study_name: str, n_trials: int = None, new_study: bool = True
     ) -> dict:
         """
-        Esegue l'ottimizzazione.
+        Executes the Hyperparameter Optimization process.
 
         Args:
-            study_name: nome dello studio Optuna
-            n_trials: numero di trial (default da config)
-            new_study: se True, crea nuovo studio. Se False, riprende esistente.
+            study_name: Name of the Optuna Study.
+            n_trials: Number of trials to run (overrides config if provided).
+            new_study: If True, creates a new study (deleting old one).
+                       If False, resumes an existing study.
 
         Returns:
-            dict: {
-                "best_params": dict,
-                "best_mase": float,
-                "study": optuna.Study
-            }
+            dict: Dictionary containing:
+                - "best_params": Best hyperparameters found.
+                - "best_mase": Best objective value.
+                - "study": The full Optuna Study object.
         """
         if n_trials is None:
             n_trials = self.config["n_trials"]
 
-        # Storage SQLite per persistenza
+        # SQLite storage definition for persistence
+        # We need this to save progress in case of crash
         storage = f"sqlite:///{self.storage_path}" if self.storage_path else None
 
-        # Gestione nuovo studio vs ripresa
+        # Study Management
         if new_study and storage:
-            # Elimina studio esistente se presente
+            # Delete existing study to start fresh
             try:
                 optuna.delete_study(study_name=study_name, storage=storage)
-                print(f"Studio '{study_name}' esistente eliminato.")
+                print(f"Existing study '{study_name}' deleted.")
             except KeyError:
-                pass  # Studio non esiste, ok
+                pass  # Study did not exist, safe to proceed
 
+        # Create or Load the Study
         study = optuna.create_study(
             study_name=study_name,
             storage=storage,
-            load_if_exists=not new_study,  # Carica se non è nuovo
-            direction="minimize",
-            sampler=TPESampler(seed=SEED),
-            pruner=NopPruner(),
+            load_if_exists=not new_study,  # Resume if new_study=False
+            direction="minimize",          # We want to MINIMIZE MASE
+            sampler=TPESampler(seed=SEED), # Tree-structured Parzen Estimator (Bayesian optimization)
+            pruner=NopPruner(),            # No Pruning (Sequential Strategy)
         )
 
-        # Calcola trials rimanenti se si riprende
+        # Calculate remaining trials (if resuming)
         completed_trials = len(study.trials)
         remaining_trials = max(0, n_trials - completed_trials)
 
+        # Logging
         print(f"\n{'=' * 60}")
-        print(f"Ottimizzazione: {self.model_name.upper()}")
-        print(f"Studio: {study_name}")
+        print(f"Optimization Start: {self.model_name.upper()}")
+        print(f"Study Name: {study_name}")
         if completed_trials > 0:
             print(
-                f"Trial completati: {completed_trials}, Rimanenti: {remaining_trials}"
+                f"Trials Completed: {completed_trials}, Remaining: {remaining_trials}"
             )
         else:
-            print(f"Trial totali: {n_trials}")
+            print(f"Total Trials: {n_trials}")
         print(
-            f"Fold: {self.config['n_folds']}, "
+            f"Folds: {self.config['n_folds']}, "
             f"Epochs: {self.config['epochs']}, Patience: {self.config['patience']}"
         )
 
+        # Log effective fold weights (for debugging purposes)
         n_folds_to_use = self.config["n_folds"]
         if n_folds_to_use == 1:
             fold_indices = [2] if len(self.folds) > 2 else [len(self.folds) - 1]
@@ -219,10 +251,11 @@ class OptunaOptimizer:
         ]
 
         print(
-            f"Fold weights: {[f'{w:.3f}' for w in effective_weights]} (samples: {self.train_sample_counts})"
+            f"Active Fold Weights: {[f'{w:.3f}' for w in effective_weights]} (Sample Counts: {self.train_sample_counts})"
         )
         print(f"{'=' * 60}\n")
 
+        # Run Optimization
         if remaining_trials > 0:
             study.optimize(
                 self._objective,
@@ -230,8 +263,9 @@ class OptunaOptimizer:
                 show_progress_bar=True,
                 callbacks=[self._save_callback],
             )
+            print("Optimization Finished.")
         else:
-            print("Tutti i trial già completati. Nessuna ottimizzazione necessaria.")
+            print("All trials completed. No further optimization needed.")
 
         return {
             "best_params": study.best_params,

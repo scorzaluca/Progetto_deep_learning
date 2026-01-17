@@ -1,20 +1,25 @@
 """
-Definizione degli spazi di ricerca per gli iperparametri di ogni modello.
-Ogni funzione ritorna un dizionario con gli iperparametri suggeriti da Optuna.
+Hyperparameter Search Spaces Definition.
 
-NOTA: Modifica questi spazi manualmente prima di ogni ottimizzazione.
-Per screening veloce, riduci i range. Per ottimizzazione intensiva, espandili.
+This module defines the search spaces for Optuna hyperparameter optimization.
+Each function corresponds to a specific model and returns a dictionary of
+suggested hyperparameters (sampled from defined ranges or distributions).
+
+Needs to adjust these ranges manually before running extensive optimization.
+For quick screening, use narrower ranges. For deep tuning, expand them.
 """
 
 
 def get_lstm_space(trial) -> dict:
     """
-    Spazio di ricerca per LSTM.
+    Search space for LSTM model.
 
-    Parametri chiave:
-    - hidden_size: dimensione layer nascosti
-    - num_layers: profondità del modello
-    - dropout: regolarizzazione (ignorato se num_layers=1)
+    Key Parameters:
+    - lr: Learning Rate (log-scale).
+    - hidden_size: Number of features in the hidden state.
+    - num_layers: Number of recurrent layers.
+    - dropout: Dropout probability (ignored if num_layers=1).
+    - grad_clip_norm: Max norm for gradient clipping.
     """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-3, log=True),
@@ -27,11 +32,11 @@ def get_lstm_space(trial) -> dict:
 
 def get_dlinear_space(trial) -> dict:
     """
-    Spazio di ricerca per DLinear.
+    Search space for DLinear model.
 
-    Parametri chiave:
-    - kernel_size: dimensione kernel per decomposizione trend/seasonal
-                   (valori dispari per padding simmetrico)
+    Key Parameters:
+    - kernel_size: Moving average kernel size for trend/seasonal decomposition.
+    - grad_clip_norm: Max norm for gradient clipping.
     """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
@@ -42,15 +47,14 @@ def get_dlinear_space(trial) -> dict:
 
 def get_patchtst_space(trial) -> dict:
     """
-    Spazio di ricerca per PatchTST.
+    Search space for PatchTST model (Training from Scratch).
 
-    Parametri chiave:
-    - d_model: dimensione embedding (deve essere divisibile per n_heads)
-    - n_heads: numero attention heads
-    - patch_length: lunghezza patch
-    - stride: passo tra patch
-
-    NOTA: Assicurati che d_model % n_heads == 0
+    Key Parameters:
+    - d_model: Embedding dimension (total). Must be divisible by n_heads.
+    - n_heads: Number of attention heads.
+    - patch_length: Size of each patch (sub-series).
+    - stride: Stride between patches.
+    - dropout: Dropout probability.
     """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
@@ -67,12 +71,12 @@ def get_patchtst_space(trial) -> dict:
 
 def get_tcn_space(trial) -> dict:
     """
-    Spazio di ricerca per TCN.
+    Search space for Temporal Convolutional Network (TCN).
 
-    Parametri chiave:
-    - hidden_size: canali nei blocchi temporali
-    - num_layers: numero blocchi dilated (dilatazione cresce esponenzialmente)
-    - kernel_size: dimensione kernel convoluzionale
+    Key Parameters:
+    - hidden_size: Number of channels in temporal blocks.
+    - num_layers: Number of dilated blocks (dilation grows exponentially: 1, 2, 4...).
+    - kernel_size: Convolutional kernel size.
     """
     return {
         "lr": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
@@ -87,16 +91,18 @@ def get_tcn_space(trial) -> dict:
 
 def get_patchtst_finetune_space(trial) -> dict:
     """
-    Spazio di ricerca per PatchTST FINE-TUNING (con encoder pretrained).
+    Search space for PatchTST FINE-TUNING (using a pretrained encoder).
 
-    I parametri architetturali sono FISSI e devono matchare il pretraining.
-    Si ottimizzano solo LR e dropout.
+    The architectural parameters (d_model, n_heads, n_layers, patch_length, stride)
+    MUST MATCH exactly the ones used during Pretraining.
+    We only optimize Learning Rate here.
     """
     return {
         "lr": trial.suggest_float(
             "lr", 1e-5, 1e-3, log=True
-        ),  # LR più basso per fine-tuning
-        # FISSI - matchano il pretraining
+        ),  # Lower LR for fine-tuning to preserve pretrained knowledge
+        
+        # FIXED ARGUMENTS - Must match pretraining config
         "d_model": 128,
         "n_heads": 4,
         "n_layers": 3,
@@ -108,10 +114,13 @@ def get_patchtst_finetune_space(trial) -> dict:
 
 def get_encoderlstm_space(trial) -> dict:
     """
-    Spazio di ricerca per EncoderLSTM.
+    Search space for EncoderLSTM.
 
-    L'encoder è pretrained e usa LR differenziato automaticamente.
-    Qui ottimizziamo i parametri della proiezione e dell'LSTM.
+    The Pretrained Encoder parameters are FIXED (imported from config).
+    We optimize only the LSTM Head parameters:
+    - projection_dim: Bottleneck dimension between Encoder and LSTM.
+    - lstm_hidden: Memory size of the LSTM.
+    - lstm_layers: Depth of the LSTM.
     """
     from ..config import ENCODER_WEIGHTS_PATH, D_MODEL, FREEZE_ENCODER
 
@@ -129,7 +138,7 @@ def get_encoderlstm_space(trial) -> dict:
 
 
 # =============================================================================
-# REGISTRY - Mapping nome modello -> funzione spazio
+# REGISTRY - Mapping model name -> space function
 # =============================================================================
 SPACE_REGISTRY = {
     "lstm": get_lstm_space,
@@ -144,22 +153,26 @@ SPACE_REGISTRY = {
 
 def get_hyperparameter_space(model_name: str, trial) -> dict:
     """
-    Ritorna lo spazio di ricerca per il modello specificato.
+    Retrieves the correct hyperparameter search space for the specified model.
 
     Args:
-        model_name: nome del modello (lowercase)
-        trial: oggetto Optuna Trial
+        model_name (str): Name of the model (case-insensitive).
+        trial: Optuna Trial object used to sample hyperparameters.
 
     Returns:
-        dict con iperparametri suggeriti
+        dict: A dictionary of sampled hyperparameters ready for model creation.
 
     Raises:
-        ValueError: se il modello non è supportato
+        ValueError: If `model_name` is not found in the registry.
     """
     model_name = model_name.lower()
+    
+    # Check if the model is supported
     if model_name not in SPACE_REGISTRY:
         raise ValueError(
-            f"Modello '{model_name}' non supportato. "
-            f"Scegli tra: {list(SPACE_REGISTRY.keys())}"
+            f"Model '{model_name}' not supported. "
+            f"Choose from: {list(SPACE_REGISTRY.keys())}"
         )
+    
+    # Execute the corresponding space function
     return SPACE_REGISTRY[model_name](trial)
