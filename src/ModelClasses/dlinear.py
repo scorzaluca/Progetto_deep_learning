@@ -64,7 +64,7 @@ class SeriesDecomp(nn.Module):
         super(SeriesDecomp, self).__init__()
         self.moving_avg = MovingAvg(kernel_size, stride=1)#initialize the moving average module
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Decomposes the input time series into seasonal and trend components.
 

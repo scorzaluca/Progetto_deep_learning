@@ -29,9 +29,10 @@ from .config import (
     HORIZON,
     TARGET_IDX,
     NAIVE_MAE_TEST,
+    PREPROCESS_CONFIG
 )
 from .config.training_config import TARGET_COL
-from .PreProcessing.preprocessing import Preprocesser, PREPROCESS_CONFIG
+from .PreProcessing import Preprocesser
 from .DataLoading import create_test_loader
 from .Training.engine import create_model
 from .Training.evaluation import evaluate_model

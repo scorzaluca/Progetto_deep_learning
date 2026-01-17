@@ -31,10 +31,11 @@ LEARNING_RATE = 0.001
 
 # --- BENCHMARK (for MASE) ---
 # Naive models were run with lookback=48 and STEP_TRAIN=STEP_VAL=1
+# (calculated via naive_run.ipynb)
 NAIVE_MAE_PER_FOLD = [0.06228089907571026, 0.08621430409181377, 0.06193031994221003]
 
 # Naive Model MAE on the final training fold (22 months train + 2 months val)
 NAIVE_MAE_FINAL_FOLD = 0.04919686427582865
 
-# Naive Model MAE on the Test Set (calculated via naive_run.ipynb)
+# Naive Model MAE on the Test Set 
 NAIVE_MAE_TEST = 0.062445086238714045
