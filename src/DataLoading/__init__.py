@@ -7,7 +7,6 @@ from .data_loader import (
 from .pretraining_loader import PretrainingDataset
 # from .data_loader_sliding import TS_Cross_Validator_Sliding
 
-# Definisco esplicitamente cosa viene esportato all'esterno
 __all__ = [
     "PVForecastDataset",
     "TS_Cross_Validator",

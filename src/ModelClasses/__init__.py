@@ -5,7 +5,7 @@ from .PatchTST import PatchTST
 from .tcn import TCN
 from .encoder_lstm import EncoderLSTM
 
-# Import opzionale per ChronosWrapper (richiede chronos-forecasting)
+# Optional Import ChronosWrapper
 try:
     from .zero_shot_model import ChronosWrapper
 except ImportError:
@@ -13,7 +13,6 @@ except ImportError:
 
 from .patchtst_pretraining import PatchTSTPretraining
 
-# Definisco esplicitamente cosa viene esportato all'esterno
 __all__ = [
     "LSTM",
     "NaivePersistence",

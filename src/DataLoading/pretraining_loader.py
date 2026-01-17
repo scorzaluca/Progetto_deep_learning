@@ -1,8 +1,3 @@
-"""
-Dataset per Self-Supervised Pretraining.
-Restituisce solo sequenze X, senza target Y.
-"""
-
 import torch
 from torch.utils.data import Dataset
 import pandas as pd
@@ -10,10 +5,21 @@ import pandas as pd
 
 class PretrainingDataset(Dataset):
     """
-    Dataset per pretraining di PatchTST.
+    Dataset for PatchTST pretraining (Masked Modeling).
     
-    A differenza di PVForecastDataset, questo restituisce SOLO X.
-    Non serve Y perché il modello ricostruisce X stesso (masked reconstruction).
+    Unlike PVForecastDataset, this dataset returns ONLY the input sequence X.
+    The target Y is not needed because the model reconstructs X itself (masked reconstruction).
+
+    Args:
+        df (pd.DataFrame): DataFrame containing the time series data (already normalized).
+        lookback (int, optional): Length of the input window. Defaults to 48.
+        step (int, optional): Stride between consecutive samples. Defaults to 1.
+
+    Attributes:
+        data (torch.Tensor): Tensor containing the time series data.
+        lookback (int): Length of the input window.
+        step (int): Stride between consecutive samples.
+        n_samples (int): Total number of samples available in the dataset.
     """
 
     def __init__(
@@ -22,33 +28,39 @@ class PretrainingDataset(Dataset):
         lookback: int = 48,
         step: int = 1,
     ):
-        """
-        Args:
-            df: DataFrame con i dati (già normalizzati).
-            lookback: Lunghezza della finestra di input.
-            step: Passo tra campioni consecutivi.
-        """
         self.data = torch.tensor(df.values, dtype=torch.float32)
         self.lookback = lookback
         self.step = step
 
-        # Calcola quanti campioni possiamo creare
-        # Non serve spazio per horizon perché non prediciamo il futuro
+        #Compute how much sample we can create from the time series
         self.n_samples = (len(self.data) - self.lookback) // self.step + 1
 
     def __len__(self):
+        """
+        Returns the total number of samples in the dataset.
+
+        Args:
+            None
+
+        Returns:
+            int: Total number of samples.
+        """
         return self.n_samples
 
     def __getitem__(self, idx):
         """
-        Restituisce solo X (la sequenza di lookback ore).
-        
-        Returns:
-            X: tensor di shape (lookback, num_features)
-        """
-        start_idx = idx * self.step
-        end_idx = start_idx + self.lookback
+        Retrieves the input sequence X for the given index.
+        The sequence has length 'lookback' and contains 'num_features' features.
 
-        X = self.data[start_idx:end_idx]  # Shape: (lookback, num_features)
+        Args:
+            idx (int): The index of the sample to retrieve.
+
+        Returns:
+            torch.Tensor: The input sequence tensor of shape (lookback, num_features).
+        """
+        start_idx = idx * self.step #Calculating the starting index of the window
+        end_idx = start_idx + self.lookback #Calculating the ending index of the window
+
+        X = self.data[start_idx:end_idx]  # Shape: (lookback, num_features) #Extracting the window from the data
         
         return X
