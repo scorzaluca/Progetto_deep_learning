@@ -1,11 +1,16 @@
 """
-Script per l'inferenza su dati di test.
-Carica il modello addestrato, preprocessa i dati di test e calcola le metriche.
+Script for Inference on Test Data.
+Loads a trained model, preprocesses the test dataset, and computes performance metrics.
 
-Uso:
+Usage:
     python -m src.run_inference
 
-Modifica le variabili di configurazione all'inizio del file per personalizzare i percorsi.
+Configuration:
+    Modify the configuration variables at the top of the file to customize paths:
+    - TRAIN_DATA_PATH: Path to training data (needed for fitting the scaler).
+    - TEST_DATA_PATH: Path to the new test data (csv/xlsx).
+    - CHECKPOINT_PATH: Path to the trained model weights (.pth).
+    - PARAMS_PATH: Path to the model hyperparameters (.json).
 """
 
 import json
@@ -14,6 +19,11 @@ import numpy as np
 import pandas as pd
 import torch
 
+# Import global project constants
+# LOOKBACK: Input sequence length 
+# HORIZON: Prediction horizon 
+# TARGET_IDX: Index of the target column in the tensor 
+# NAIVE_MAE_TEST: Baseline error on the test set for MASE calculation
 from .config import (
     LOOKBACK,
     HORIZON,
@@ -29,44 +39,63 @@ from .Utils import set_seed, get_device, plot_test_predictions, plot_error_distr
 
 
 # =============================================================================
-# CONFIGURAZIONE - MODIFICA QUESTI VALORI PRIMA DI ESEGUIRE
+# CONFIGURATION - MODIFY THESE VALUES BEFORE RUNNING
 # =============================================================================
+# Path to the TRAINING dataset (Required to fit the Scaler correctly)
+# We must use the same scaling parameters (mean, std) as seen during training.
 TRAIN_DATA_PATH = "data/processed/preprocessed_ds.csv"
+
+# Path to the TEST dataset (The new data we want to predict on)
 TEST_DATA_PATH = "data/processed/merged_test_ds.csv"
+
+# Path to the trained model weights (.pth file)
+# This file contains the learnable parameters (weights/biases) saved after training.
 CHECKPOINT_PATH = "results/checkpoints/encoderlstm_48_final_100_epochs.pth"
+
+# Path to the hyperparameter file (.json)
+# This file contains the structural config (hidden_size, n_layers, etc.) needed to rebuild the model architecture.
 PARAMS_PATH = "results/params/encoderlstm_48_100_epochs_params.json"
+
+# Name of the model architecture to instantiate (must match the one in engine.create_model)
 MODEL_NAME = "encoderlstm"
+
+# Step size for sliding window generation in Test set
 STEP_SAMPLES_TEST = 1
 
 
 def load_and_preprocess_test(test_path: str) -> pd.DataFrame:
     """
-    Carica e preprocessa i dati di test.
-    Supporta file Excel (.xlsx, .xls) e CSV (.csv).
+    Loads and preprocesses the test dataset.
+    Supports both Excel (.xlsx, .xls) and CSV (.csv) formats.
+
+    It instantiates the Preprocesser class to apply the same cleaning pipeline used for training data.
 
     Args:
-        test_path: percorso al file di test
+        test_path (str): Path to the test data file.
 
     Returns:
-        pd.DataFrame: dati preprocessati
+        pd.DataFrame: The preprocessed DataFrame ready for inference.
     """
-    print(f"\n📂 Caricamento dati di test: {test_path}")
+    print(f"\n Loading test data: {test_path}")
 
-    # Determina il formato e carica
+    # Determine file format and load accordingly
     if test_path.endswith((".xlsx", ".xls")):
         test_df = pd.read_excel(test_path)
     elif test_path.endswith(".csv"):
         test_df = pd.read_csv(test_path)
     else:
-        raise ValueError(f"Formato non supportato: {test_path}. Usa .xlsx, .xls o .csv")
+        raise ValueError(f"Unsupported format: {test_path}. Use .xlsx, .xls or .csv")
 
-    print(f"   Shape raw: {test_df.shape}")
+    print(f"   Raw shape: {test_df.shape}")
 
-    # Applica preprocessing (usa run() per eseguire tutta la pipeline)
+    # Initialize the Preprocesser with the raw dataframe and configuration
     preprocesser = Preprocesser(test_df, PREPROCESS_CONFIG)
+    
+    # Run the full preprocessing pipeline
+    # This ensures the test data has the exact same columns/features as training data
     test_df = preprocesser.run()
 
-    print(f"   Shape preprocessed: {test_df.shape}")
+    print(f"   Preprocessed shape: {test_df.shape}")
 
     return test_df
 
@@ -77,36 +106,44 @@ def load_model(
     device: torch.device,
 ) -> torch.nn.Module:
     """
-    Carica il modello dai pesi salvati.
+    Reconstructs the model architecture and loads the trained weights.
 
     Args:
-        checkpoint_path: percorso al file .pth
-        params_path: percorso al file params.json
-        device: device su cui caricare il modello
+        checkpoint_path (str): Path to the .pth file containing model weights (state_dict).
+        params_path (str): Path to the .json file containing model hyperparameters (hidden_size, layers, etc.).
+        device (torch.device): The device (CPU/GPU) where the model will be loaded.
 
     Returns:
-        nn.Module: modello caricato
+        torch.nn.Module: The fully initialized model in evaluation mode.
     """
-    print("\n🔧 Caricamento modello...")
+    print(f"\n Loading model...")
     print(f"   Checkpoint: {checkpoint_path}")
     print(f"   Params: {params_path}")
 
-    # Carica parametri
+    # Load Hyperparameters
+    # We need the configuration to instantiate the correct model class.
     with open(params_path, "r") as f:
         params_data = json.load(f)
 
     best_params = params_data.get("best_params", params_data)
 
-    # Crea modello
+    # Instantiate Architecture
+    # Uses the Factory Pattern from engine.py to create the empty model structure
     model = create_model(MODEL_NAME, best_params)
 
-    # Carica pesi
+    # Load Weights
+    # Load the state dictionary (weights/biases) from the checkpoint file
+    # map_location ensures we can load a GPU-trained model on CPU if needed
     state_dict = torch.load(checkpoint_path, map_location=device)
+    
+    # Apply weights into the model architecture
     model.load_state_dict(state_dict)
+    
+    # Move model to target device and switch to Evaluation Mode
     model.to(device)
     model.eval()
 
-    print(f"   ✅ Modello caricato su {device}")
+    print(f"Model loaded on {device}")
 
     return model
 
@@ -117,27 +154,29 @@ def calculate_metrics(
     naive_mae: float = None,
 ) -> dict:
     """
-    Calcola le metriche di valutazione.
+    Computes performance metrics (MAE, RMSE, MASE).
 
     Args:
-        predictions: predizioni denormalizzate (N, horizon, 1)
-        targets: target denormalizzati (N, horizon, 1)
-        naive_mae: MAE del modello naive per calcolare MASE
+        predictions (np.ndarray): Array of predicted values (shape: [N, horizon, 1]).
+        targets (np.ndarray): Array of ground truth values (shape: [N, horizon, 1]).
+        naive_mae (float, optional): Baseline MAE for MASE calculation.
 
     Returns:
-        dict: dizionario con MAE, RMSE, MASE
+        dict: Dictionary containing 'MAE', 'RMSE', and 'MASE' (if applicable).
     """
-    # Flatten per calcolo metriche
+    # Flatten arrays to compute aggregate metrics across all samples/steps
+    # From shape (N, Horizon, 1) -> (N * Horizon)
     preds_flat = predictions.flatten()
     targets_flat = targets.flatten()
 
-    # MAE
+    # Calculate Mean Absolute Error (MAE)
     mae = np.mean(np.abs(preds_flat - targets_flat))
 
-    # RMSE
+    # Calculate Root Mean Squared Error (RMSE)
     rmse = np.sqrt(np.mean((preds_flat - targets_flat) ** 2))
 
-    # MASE (se naive_mae disponibile)
+    # Calculate Mean Absolute Scaled Error (MASE)
+    # Only possible if the baseline naive error is provided
     mase = mae / naive_mae if naive_mae else None
 
     return {
@@ -148,31 +187,51 @@ def calculate_metrics(
 
 
 def main():
-    """Funzione principale."""
+    """
+    Main execution pipeline for Test Inference.
+
+    Steps:
+    1. Sets up the device and reproducibility (seed).
+    2. Loads TRAIN data to correctly fit the scaler (ensuring consistent normalization).
+    3. Loads and preprocesses TEST data.
+    4. Creates a Test DataLoader with sliding window logic.
+    5. Loads the trained model architecture and weights.
+    6. Runs inference TWICE:
+       - First on NORMALIZED data (to calculate MASE comparable with validation).
+       - Second on DENORMALIZED data (to get Real World metrics in Watts).
+    7. Computes and prints metrics (MAE, RMSE, MASE).
+    8. Generates plots for visual inspection.
+    9. Saves all results to a JSON file.
+    """
     print("\n" + "=" * 60)
-    print("🔮 INFERENZA SU DATI DI TEST")
+    print("TEST SET INFERENCE")
     print("=" * 60)
 
     set_seed(42)
     device = get_device()
 
-    # 1. Carica dati di training (per fittare lo scaler)
-    print(f"\n📂 Caricamento dati di training: {TRAIN_DATA_PATH}")
+    # Load Training Data (Required for Scaler fitting):
+    # The scaler must be fitted on training data statistics (mean, std)
+    # to avoid data leakage and ensure the model sees data in the expected range.
+    print(f"\nLoading training data: {TRAIN_DATA_PATH}")
     train_df = pd.read_csv(TRAIN_DATA_PATH)
     print(f"   Shape: {train_df.shape}")
 
-    # 2. Carica e preprocessa dati di test
+    # Load and Preprocess Test Data
     test_df = load_and_preprocess_test(TEST_DATA_PATH)
 
-    # Verifica che le colonne matchino
+    # Verify column consistency:
+    # The model expects the exact same features as during training.
     if list(train_df.columns) != list(test_df.columns):
-        print("\n⚠️ ATTENZIONE: Le colonne del test set non corrispondono!")
+        print("\n WARNING: Test set columns do not match Training set columns!")
         print(f"   Train columns: {list(train_df.columns)}")
         print(f"   Test columns: {list(test_df.columns)}")
-        # Prova a riordinare
+        # Attempt to reorder columns to match training
         test_df = test_df[train_df.columns]
 
-    # 3. Crea test loader (scaler fittato su training)
+    # Create Test Loader
+    # Scaler is fitted here on train_df and applied to test_df
+    # STEP_SAMPLES_TEST controls the sliding window stride 
     test_loader, scaler = create_test_loader(
         train_df=train_df,
         test_df=test_df,
@@ -182,42 +241,46 @@ def main():
         step=STEP_SAMPLES_TEST,
     )
 
-    # 4. Carica modello
+    # Load Model
     model = load_model(CHECKPOINT_PATH, PARAMS_PATH, device)
 
-    # 5. Esegui inferenza (dati NORMALIZZATI per metriche coerenti con NAIVE_MAE_TEST)
-    print("\n🔮 Esecuzione inferenza...")
+    # Run Inference (NORMALIZED):
+    # We pass scaler=None to keep predictions in the 0-1 range.
+    # This is necessary to calculate MASE using the NAIVE_MAE_TEST constant (which is normalized).
+    print("\n Running Inference (Normalized)...")
     predictions_norm, targets_norm = evaluate_model(
         model=model,
         val_loader=test_loader,
         device=device,
-        scaler=None,  # Senza scaler -> dati normalizzati
+        scaler=None,  # No scaler -> output remains normalized
         target_idx=None,
     )
     print(f"   Predictions shape: {predictions_norm.shape}")
     print(f"   Targets shape: {targets_norm.shape}")
 
-    # 6. Calcola metriche su dati NORMALIZZATI (coerenti con NAIVE_MAE_TEST)
-    print("\n📊 Calcolo metriche...")
+    # Compute Metrics (NORMALIZED)
+    print("\n Computing Metrics...")
     metrics_norm = calculate_metrics(predictions_norm, targets_norm, NAIVE_MAE_TEST)
 
-    # 7. Denormalizza per metriche in scala reale (Watt)
+    # Run Inference (DENORMALIZED):
+    # We pass the scaler to transform predictions back to real units (Watts).
+    # This gives us interpretable errors.
     predictions_denorm, targets_denorm = evaluate_model(
         model=model,
         val_loader=test_loader,
         device=device,
-        scaler=scaler,  # Con scaler -> dati denormalizzati
+        scaler=scaler,  # Pass scaler -> output is denormalized
         target_idx=TARGET_IDX,
     )
     metrics_denorm = calculate_metrics(
         predictions_denorm, targets_denorm, naive_mae=None
     )
 
-    # 8. Stampa TUTTE le metriche
+    # Print Results
     print("\n" + "=" * 60)
-    print("📈 RISULTATI TEST SET")
+    print("TEST SET RESULTS")
     print("=" * 60)
-    print("\n--- Metriche NORMALIZZATE (scala 0-1) ---")
+    print("\n--- NORMALIZED Metrics (Scale 0-1) ---")
     print(f"MAE:  {metrics_norm['MAE']:.6f}")
     print(f"RMSE: {metrics_norm['RMSE']:.6f}")
     if metrics_norm["MASE"]:
@@ -225,12 +288,12 @@ def main():
     else:
         print("MASE: N/A")
 
-    print("\n--- Metriche DENORMALIZZATE (Watt) ---")
+    print("\n--- DENORMALIZED Metrics (Watts) ---")
     print(f"MAE:  {metrics_denorm['MAE']:.2f} W")
     print(f"RMSE: {metrics_denorm['RMSE']:.2f} W")
     print("=" * 60)
 
-    # 9. Salva risultati
+    # Save Results to JSON
     results_dir = "results/test_results"
     os.makedirs(results_dir, exist_ok=True)
 
@@ -249,23 +312,27 @@ def main():
     results_path = os.path.join(results_dir, "test_results.json")
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
-    print(f"\n💾 Risultati salvati: {results_path}")
+    print(f"\nResults saved: {results_path}")
 
-    # 10. Plot (dati denormalizzati)
-    print("\n📊 Generazione plots...")
+    # Generate Plots (on Denormalized data)
+    print("\n Generating Plots...")
+    
+    # Plot random samples of predictions vs ground truth
     plot_test_predictions(
         predictions_denorm,
         targets_denorm,
         n_samples=5,
         save_path=os.path.join(results_dir, "predictions_samples.png"),
     )
+    
+    # Plot error distribution histogram
     plot_error_distribution(
         predictions_denorm,
         targets_denorm,
         save_path=os.path.join(results_dir, "error_distribution.png"),
     )
 
-    print("\n✅ Inferenza completata!")
+    print("\nInference Completed!")
 
 
 if __name__ == "__main__":
