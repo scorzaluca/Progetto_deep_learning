@@ -1,7 +1,3 @@
-"""
-PatchTST per Self-Supervised Pretraining con Masked Patch Reconstruction.
-"""
-
 import torch
 import torch.nn as nn
 from ..config import LOOKBACK, INPUT_SIZE

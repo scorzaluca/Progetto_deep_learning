@@ -1,12 +1,15 @@
 """
-Configurazione per il training.
+Training Configuration.
+
+Contains parameters for data sampling, training loop, and benchmark metrics.
 """
 
 from .model_config import LOOKBACK, HORIZON
 
+
 # --- SAMPLING ---
-STEP_TRAIN = 1  # Passo tra campioni per training (tutti i campioni)
-STEP_VAL = 1  # Passo tra campioni per validation (campioni meno correlati)
+STEP_TRAIN = 1  # Step between samples for training (use all samples)
+STEP_VAL = 1  # Step between samples for validation
 BATCH_SIZE = 64
 N_SPLITS = 3
 TARGET_COL = "pv_power"
@@ -25,14 +28,13 @@ SEED = 42
 EPOCHS = 100
 LEARNING_RATE = 0.001
 
-# --- BENCHMARK (per MASE) ---
-# NOTA: I validation set sono identici per expanding e sliding windows,
-# quindi il MAE naive è lo stesso per entrambe le strategie.
+
+# --- BENCHMARK (for MASE) ---
+# Naive models were run with lookback=48 and STEP_TRAIN=STEP_VAL=1
 NAIVE_MAE_PER_FOLD = [0.06228089907571026, 0.08621430409181377, 0.06193031994221003]
 
-# MAE del modello naive sul final training fold (22 mesi train + 2 mesi val)
+# Naive Model MAE on the final training fold (22 months train + 2 months val)
 NAIVE_MAE_FINAL_FOLD = 0.04919686427582865
 
-# MAE del modello naive sul test set (da calcolare con naive_run.ipynb)
-# Questo valore verrà aggiornato dopo aver ricevuto i dati di test
+# Naive Model MAE on the Test Set (calculated via naive_run.ipynb)
 NAIVE_MAE_TEST = 0.062445086238714045

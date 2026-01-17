@@ -1,5 +1,6 @@
 import torch.nn as nn
 from ..config import LOOKBACK, HORIZON
+import torch
 
 
 class PatchTST(nn.Module):
@@ -117,7 +118,7 @@ class PatchTST(nn.Module):
             model.load_pretrained_encoder("results/pretrained/patchtst_encoder.pth")
             # Now the model is initialized with pretrained weights
         """
-        import torch
+
         
         print(f"Loading pretrained weights from: {pretrain_path}")
         
