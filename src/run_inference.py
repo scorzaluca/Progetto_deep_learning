@@ -13,7 +13,6 @@ import os
 import numpy as np
 import pandas as pd
 import torch
-import matplotlib.pyplot as plt
 
 from .config import (
     LOOKBACK,
@@ -26,20 +25,18 @@ from .PreProcessing.preprocessing import Preprocesser, PREPROCESS_CONFIG
 from .DataLoading import create_test_loader
 from .Training.engine import create_model
 from .Training.evaluation import evaluate_model
-from .Utils import set_seed, get_device
+from .Utils import set_seed, get_device, plot_test_predictions, plot_error_distribution
 
 
 # =============================================================================
 # CONFIGURAZIONE - MODIFICA QUESTI VALORI PRIMA DI ESEGUIRE
 # =============================================================================
 TRAIN_DATA_PATH = "data/processed/preprocessed_ds.csv"
-TEST_DATA_PATH = (
-    "data/processed/merged_test_ds.csv"
-    # "data/test/test_data.xlsx"  # Modifica questo con il path dei dati di test
-)
+TEST_DATA_PATH = "data/processed/merged_test_ds.csv"
 CHECKPOINT_PATH = "results/checkpoints/encoderlstm_48_final_100_epochs.pth"
 PARAMS_PATH = "results/params/encoderlstm_48_100_epochs_params.json"
 MODEL_NAME = "encoderlstm"
+STEP_SAMPLES_TEST = 1
 
 
 def load_and_preprocess_test(test_path: str) -> pd.DataFrame:
@@ -150,85 +147,6 @@ def calculate_metrics(
     }
 
 
-def plot_predictions(
-    predictions: np.ndarray,
-    targets: np.ndarray,
-    n_samples: int = 5,
-    save_path: str = None,
-):
-    """
-    Plotta alcune predizioni vs target.
-
-    Args:
-        predictions: predizioni (N, horizon, 1)
-        targets: target (N, horizon, 1)
-        n_samples: numero di campioni da plottare
-        save_path: percorso dove salvare il plot
-    """
-    fig, axes = plt.subplots(n_samples, 1, figsize=(12, 3 * n_samples))
-
-    # Seleziona campioni casuali
-    indices = np.random.choice(len(predictions), n_samples, replace=False)
-
-    for i, idx in enumerate(indices):
-        ax = axes[i] if n_samples > 1 else axes
-
-        pred = predictions[idx].flatten()
-        target = targets[idx].flatten()
-
-        ax.plot(target, label="Target", marker="o", linewidth=2)
-        ax.plot(pred, label="Prediction", marker="x", linewidth=2)
-        ax.set_title(f"Sample {idx}")
-        ax.set_xlabel("Hour")
-        ax.set_ylabel("PV Power")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"📊 Plot salvato: {save_path}")
-
-    plt.show()
-
-
-def plot_error_distribution(
-    predictions: np.ndarray,
-    targets: np.ndarray,
-    save_path: str = None,
-):
-    """
-    Plotta la distribuzione degli errori.
-    """
-    errors = predictions.flatten() - targets.flatten()
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-    # Histogram
-    axes[0].hist(errors, bins=50, edgecolor="black", alpha=0.7)
-    axes[0].axvline(0, color="red", linestyle="--", linewidth=2)
-    axes[0].set_xlabel("Error")
-    axes[0].set_ylabel("Frequency")
-    axes[0].set_title("Error Distribution")
-
-    # Scatter
-    axes[1].scatter(targets.flatten(), predictions.flatten(), alpha=0.3, s=5)
-    axes[1].plot([0, 1], [0, 1], "r--", linewidth=2, label="Perfect")
-    axes[1].set_xlabel("Target")
-    axes[1].set_ylabel("Prediction")
-    axes[1].set_title("Prediction vs Target")
-    axes[1].legend()
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches="tight")
-        print(f"📊 Plot salvato: {save_path}")
-
-    plt.show()
-
-
 def main():
     """Funzione principale."""
     print("\n" + "=" * 60)
@@ -261,6 +179,7 @@ def main():
         target_col=TARGET_COL,
         lookback=LOOKBACK,
         horizon=HORIZON,
+        step=STEP_SAMPLES_TEST,
     )
 
     # 4. Carica modello
@@ -334,7 +253,7 @@ def main():
 
     # 10. Plot (dati denormalizzati)
     print("\n📊 Generazione plots...")
-    plot_predictions(
+    plot_test_predictions(
         predictions_denorm,
         targets_denorm,
         n_samples=5,

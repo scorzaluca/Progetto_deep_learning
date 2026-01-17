@@ -218,6 +218,7 @@ def create_test_loader(
     lookback: int = 24,
     horizon: int = 24,
     batch_size: int = 64,
+    step: int = 1,
 ):
     """
     Crea DataLoader per il test set con scaler fittato su tutti i dati di training.
@@ -232,6 +233,7 @@ def create_test_loader(
         lookback: finestra di input
         horizon: finestra di output
         batch_size: dimensione batch
+        step: passo tra campioni consecutivi (1 = tutti, 24 = uno al giorno)
 
     Returns:
         Tuple[DataLoader, MinMaxScaler]: test_loader, scaler (per denormalizzazione)
@@ -248,7 +250,7 @@ def create_test_loader(
 
     # Crea dataset
     test_dataset = PVForecastDataset(
-        test_scaled_df, target_col, lookback, horizon, step=1
+        test_scaled_df, target_col, lookback, horizon, step
     )
 
     # Crea DataLoader
@@ -263,6 +265,6 @@ def create_test_loader(
     )
 
     print("\n=== TEST DATA LOADER ===")
-    print(f"Test: {len(test_df)} rows -> {len(test_dataset)} samples")
+    print(f"Test: {len(test_df)} rows -> {len(test_dataset)} samples (step={step})")
 
     return test_loader, scaler

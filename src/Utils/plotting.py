@@ -159,3 +159,117 @@ def plot_training_history(history, model_name, fold_idx, save_dir):
     plt.close()
 
     print(f"  History salvata: {plot_path}")
+
+
+def plot_test_predictions(
+    predictions: np.ndarray,
+    targets: np.ndarray,
+    n_samples: int = 5,
+    save_path: str = None,
+):
+    """
+    Plotta alcune predizioni vs target per test inference.
+
+    Args:
+        predictions: predizioni (N, horizon, 1)
+        targets: target (N, horizon, 1)
+        n_samples: numero di campioni da plottare
+        save_path: percorso dove salvare il plot
+    """
+    fig, axes = plt.subplots(n_samples, 1, figsize=(12, 3 * n_samples))
+
+    # Seleziona campioni casuali
+    indices = np.random.choice(len(predictions), n_samples, replace=False)
+
+    for i, idx in enumerate(indices):
+        ax = axes[i] if n_samples > 1 else axes
+
+        pred = predictions[idx].flatten()
+        target = targets[idx].flatten()
+
+        ax.plot(target, label="Target", marker="o", linewidth=2)
+        ax.plot(pred, label="Prediction", marker="x", linewidth=2)
+        ax.set_title(f"Sample {idx}")
+        ax.set_xlabel("Hour")
+        ax.set_ylabel("PV Power")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"📊 Plot salvato: {save_path}")
+
+    plt.show()
+
+
+def plot_error_distribution(
+    predictions: np.ndarray,
+    targets: np.ndarray,
+    save_path: str = None,
+):
+    """
+    Plotta la distribuzione degli errori con statistiche.
+    """
+    errors = predictions.flatten() - targets.flatten()
+
+    # Calcola statistiche
+    mean_err = np.mean(errors)
+    std_err = np.std(errors)
+    var_err = np.var(errors)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Histogram con statistiche
+    axes[0].hist(errors, bins=50, edgecolor="black", alpha=0.7)
+    axes[0].axvline(0, color="red", linestyle="--", linewidth=2, label="Zero")
+    axes[0].axvline(
+        mean_err,
+        color="green",
+        linestyle="-",
+        linewidth=2,
+        label=f"Mean: {mean_err:.4f}",
+    )
+    axes[0].set_xlabel("Error")
+    axes[0].set_ylabel("Frequency")
+    axes[0].set_title("Error Distribution")
+
+    # Box di testo con statistiche
+    stats_text = f"Mean: {mean_err:.4f}\nStd: {std_err:.4f}\nVar: {var_err:.6f}"
+    axes[0].text(
+        0.95,
+        0.95,
+        stats_text,
+        transform=axes[0].transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        horizontalalignment="right",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+    axes[0].legend(loc="upper left")
+
+    # Scatter - linea perfect attraversa tutto il range dei dati
+    targets_flat = targets.flatten()
+    preds_flat = predictions.flatten()
+    axes[1].scatter(targets_flat, preds_flat, alpha=0.3, s=5)
+
+    # Linea perfect che attraversa tutto il grafico
+    min_val = min(targets_flat.min(), preds_flat.min())
+    max_val = max(targets_flat.max(), preds_flat.max())
+    axes[1].plot(
+        [min_val, max_val], [min_val, max_val], "r--", linewidth=2, label="Perfect"
+    )
+
+    axes[1].set_xlabel("Target")
+    axes[1].set_ylabel("Prediction")
+    axes[1].set_title("Prediction vs Target")
+    axes[1].legend()
+
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"📊 Plot salvato: {save_path}")
+
+    plt.show()
