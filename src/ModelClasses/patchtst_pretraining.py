@@ -1,7 +1,3 @@
-"""
-PatchTST per Self-Supervised Pretraining con Masked Patch Reconstruction.
-"""
-
 import torch
 import torch.nn as nn
 from ..config import LOOKBACK, INPUT_SIZE
@@ -37,7 +33,6 @@ class PatchTSTPretraining(nn.Module):
     def __init__(self, model_config: dict):
         super().__init__()
 
-        
         from transformers import PatchTSTConfig, PatchTSTForPretraining
 
         # Configuration parameters
@@ -50,7 +45,6 @@ class PatchTSTPretraining(nn.Module):
             # Input dimensions
             num_input_channels=self.num_channels,
             context_length=self.lookback,
-            
             # Architecture (Transformer) parameters
             patch_length=model_config.get("patch_length", 16),
             patch_stride=model_config.get("stride", 8),
@@ -59,7 +53,6 @@ class PatchTSTPretraining(nn.Module):
             num_hidden_layers=model_config.get("n_layers", 3),
             attention_dropout=model_config.get("dropout", 0.2),
             ff_dropout=model_config.get("dropout", 0.2),
-            
             # PRETRAINING SPECIFIC PARAMETERS
             # This enables the masked patch reconstruction task
             mask_type="random",
@@ -139,11 +132,13 @@ class PatchTSTPretraining(nn.Module):
                 output_hidden_states=True,
             )
 
-            hidden = outputs.last_hidden_state  # Shape: (Batch, Num_Channels, Num_Patches, D_Model)
-            
+            hidden = (
+                outputs.last_hidden_state
+            )  # Shape: (Batch, Num_Channels, Num_Patches, D_Model)
+
             # Retrieve dimensions
             batch_size, num_channels, num_patches, d_model = hidden.shape
-            
+
             # Reshape logic:
             # 1. Permute to bring channels next to d_model: (Batch, Num_Patches, Num_Channels, D_Model)
             # 2. Reshape to flatten channels and d_model: (Batch, Num_Patches, Num_Channels * D_Model)

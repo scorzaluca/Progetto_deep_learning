@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from ..config import LOOKBACK, HORIZON
 
@@ -5,10 +6,10 @@ from ..config import LOOKBACK, HORIZON
 class PatchTST(nn.Module):
     """
     PatchTST model for PV Power Forecasting.
-    
+
     This model utilizes the PatchTST architecture, a Transformer-based model optimized for time series forecasting.
     It segments the input time series into patches, which are then processed as tokens by the Transformer.
-    
+
     Key Features:
     1. **Patching**: Reduces sequence length and captures local semantic information.
     2. **Channel Independence**: Each channel (variable) is processed independently by the same backbone, sharing weights.
@@ -56,12 +57,11 @@ class PatchTST(nn.Module):
             f"lookback: {self.lookback}, horizon: {self.horizon}"
         )
 
-        
         hf_config = PatchTSTConfig(
             context_length=self.lookback,
             prediction_length=self.horizon,
             num_input_channels=self.num_channels,
-            num_targets=self.num_channels, # Predict all channels, select target later
+            num_targets=self.num_channels,  # Predict all channels, select target later
             patch_length=model_config.get("patch_length", 16),
             patch_stride=model_config.get("stride", 8),
             d_model=model_config.get("d_model", 128),
@@ -98,9 +98,8 @@ class PatchTST(nn.Module):
         # We slice the tensor to extract the specific channel corresponding to target_idx.
         # Result shape: (Batch, Horizon, 1)
         target_output = full_output[:, :, self.target_idx : self.target_idx + 1]
-        
-        return target_output
 
+        return target_output
 
     def load_pretrained_encoder(self, pretrain_path: str):
         """
@@ -117,20 +116,19 @@ class PatchTST(nn.Module):
             model.load_pretrained_encoder("results/pretrained/patchtst_encoder.pth")
             # Now the model is initialized with pretrained weights
         """
-        import torch
-        
+
         print(f"Loading pretrained weights from: {pretrain_path}")
-        
+
         # Load the state dictionary from the file
         encoder_state = torch.load(pretrain_path, map_location="cpu")
-        
+
         # Load the weights specifically into the ENCODER part of the model.
         # Structure:
         # self.model                -> PatchTSTForPrediction (HuggingFace wrapper)
         # self.model.model          -> PatchTSTModel (Core model)
         # self.model.model.encoder  -> The Transformer Encoder
         self.model.model.encoder.load_state_dict(encoder_state, strict=False)
-        
+
         self.is_pretrained = True
-        
+
         print("Encoder weights loaded successfully!")
