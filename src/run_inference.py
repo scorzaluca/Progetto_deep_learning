@@ -20,18 +20,13 @@ import pandas as pd
 import torch
 
 # Import global project constants
-# LOOKBACK: Input sequence length 
-# HORIZON: Prediction horizon 
-# TARGET_IDX: Index of the target column in the tensor 
+# LOOKBACK: Input sequence length
+# HORIZON: Prediction horizon
+# TARGET_IDX: Index of the target column in the tensor
 # NAIVE_MAE_TEST: Baseline error on the test set for MASE calculation
-from .config import (
-    LOOKBACK,
-    HORIZON,
-    TARGET_IDX,
-    NAIVE_MAE_TEST,
-)
+from .config import LOOKBACK, HORIZON, TARGET_IDX, NAIVE_MAE_TEST, PREPROCESS_CONFIG
 from .config.training_config import TARGET_COL
-from .PreProcessing.preprocessing import Preprocesser, PREPROCESS_CONFIG
+from .PreProcessing import Preprocesser
 from .DataLoading import create_test_loader
 from .Training.engine import create_model
 from .Training.evaluation import evaluate_model
@@ -90,7 +85,7 @@ def load_and_preprocess_test(test_path: str) -> pd.DataFrame:
 
     # Initialize the Preprocesser with the raw dataframe and configuration
     preprocesser = Preprocesser(test_df, PREPROCESS_CONFIG)
-    
+
     # Run the full preprocessing pipeline
     # This ensures the test data has the exact same columns/features as training data
     test_df = preprocesser.run()
@@ -116,7 +111,7 @@ def load_model(
     Returns:
         torch.nn.Module: The fully initialized model in evaluation mode.
     """
-    print(f"\n Loading model...")
+    print("\n Loading model...")
     print(f"   Checkpoint: {checkpoint_path}")
     print(f"   Params: {params_path}")
 
@@ -135,10 +130,10 @@ def load_model(
     # Load the state dictionary (weights/biases) from the checkpoint file
     # map_location ensures we can load a GPU-trained model on CPU if needed
     state_dict = torch.load(checkpoint_path, map_location=device)
-    
+
     # Apply weights into the model architecture
     model.load_state_dict(state_dict)
-    
+
     # Move model to target device and switch to Evaluation Mode
     model.to(device)
     model.eval()
@@ -231,7 +226,7 @@ def main():
 
     # Create Test Loader
     # Scaler is fitted here on train_df and applied to test_df
-    # STEP_SAMPLES_TEST controls the sliding window stride 
+    # STEP_SAMPLES_TEST controls the sliding window stride
     test_loader, scaler = create_test_loader(
         train_df=train_df,
         test_df=test_df,
@@ -316,7 +311,7 @@ def main():
 
     # Generate Plots (on Denormalized data)
     print("\n Generating Plots...")
-    
+
     # Plot random samples of predictions vs ground truth
     plot_test_predictions(
         predictions_denorm,
@@ -324,7 +319,7 @@ def main():
         n_samples=5,
         save_path=os.path.join(results_dir, "predictions_samples.png"),
     )
-    
+
     # Plot error distribution histogram
     plot_error_distribution(
         predictions_denorm,

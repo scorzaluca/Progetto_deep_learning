@@ -23,7 +23,7 @@ class MovingAvg(nn.Module):
     """
 
     def __init__(self, kernel_size: int, stride: int = 1):
-        super(MovingAvg, self).__init__() # Initialize the parent class
+        super(MovingAvg, self).__init__()  # Initialize the parent class
         self.kernel_size = kernel_size
         # Initialize the average pooling layer
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=0)
@@ -44,8 +44,8 @@ class MovingAvg(nn.Module):
         x = torch.cat([front, x, end], dim=1)
 
         # AvgPool1d requires (Batch, Channels, Seq_len)
-        x = self.avg(x.permute(0, 2, 1))#change the shape of the tensor
-        x = x.permute(0, 2, 1)#change the shape of the tensor
+        x = self.avg(x.permute(0, 2, 1))  # change the shape of the tensor
+        x = x.permute(0, 2, 1)  # change the shape of the tensor
         return x
 
 
@@ -62,9 +62,11 @@ class SeriesDecomp(nn.Module):
 
     def __init__(self, kernel_size: int):
         super(SeriesDecomp, self).__init__()
-        self.moving_avg = MovingAvg(kernel_size, stride=1)#initialize the moving average module
+        self.moving_avg = MovingAvg(
+            kernel_size, stride=1
+        )  # initialize the moving average module
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Decomposes the input time series into seasonal and trend components.
 
@@ -76,8 +78,12 @@ class SeriesDecomp(nn.Module):
                 - seasonal (torch.Tensor): The seasonal component (Batch, Seq_len, Channels).
                 - trend (torch.Tensor): The trend component (Batch, Seq_len, Channels).
         """
-        moving_mean = self.moving_avg(x) #using the moving average module to extract the trend
-        residual = x - moving_mean #subtract the trend from the input to get the seasonal component
+        moving_mean = self.moving_avg(
+            x
+        )  # using the moving average module to extract the trend
+        residual = (
+            x - moving_mean
+        )  # subtract the trend from the input to get the seasonal component
         return residual, moving_mean
 
 
@@ -89,7 +95,7 @@ class SeriesDecomp(nn.Module):
 class DLinearM(nn.Module):
     """
     DLinear (Original Paper): Decomposition-Linear Model (Multivariate/Channel-Independent).
-    
+
     This implementation follows the original paper "Are Transformers Effective for Time Series Forecasting?"
     (Zeng et al., AAAI 2023).
 
@@ -121,7 +127,7 @@ class DLinearM(nn.Module):
     def __init__(self, model_config: dict):
         super(DLinearM, self).__init__()
 
-        #Configuration parameters (extracting parameters from the config dictionary)
+        # Configuration parameters (extracting parameters from the config dictionary)
         self.input_size = model_config.get("input_size", 24)  # num channels
         self.target_idx = model_config.get("target_idx", 23)  # indice pv_power
         self.lookback = model_config.get("lookback", 48)  # seq_len
@@ -204,7 +210,7 @@ class DLinearI(nn.Module):
     """
 
     def __init__(self, model_config: dict):
-        super(DLinearI, self).__init__() 
+        super(DLinearI, self).__init__()
 
         # Configuration parameters
         # input_size is NOT needed here because this model is UNIVARIATE (it only looks at the target column)
@@ -236,7 +242,7 @@ class DLinearI(nn.Module):
         Computes the forward pass of DLinearI (Univariate).
 
         Args:
-            x (torch.Tensor): Input tensor of shape (Batch, Lookback, Channels). 
+            x (torch.Tensor): Input tensor of shape (Batch, Lookback, Channels).
                               Note that only the target channel is used.
 
         Returns:
