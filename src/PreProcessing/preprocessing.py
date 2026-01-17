@@ -2,8 +2,6 @@ import pandas as pd
 import numpy as np
 
 
-
-
 class Preprocesser:
     """
     Handles data preprocessing steps for PV power forecasting.
@@ -27,9 +25,10 @@ class Preprocesser:
         dummy_column (str): Categorical column to one-hot encode.
         fillna_column (list): List of columns to fill NaNs with 0.
     """
+
     def __init__(self, df: pd.DataFrame, preprocess_config: dict):
         self.df = df
-        
+
         # Extract configuration parameters from the dictionary
         self.date_col = preprocess_config.get("date_col")
         self.columns_to_remove = preprocess_config.get("columns_to_remove")
@@ -109,7 +108,7 @@ class Preprocesser:
             "moderate rain",
             "haze",
         ]
-        
+
         # Group rare categories into 'other'
         # If the value is NOT in the main list, replace it with 'other'
         condizione_principale = self.df[self.dummy_column].isin(categorie_principali)
@@ -189,30 +188,17 @@ class Preprocesser:
         self.night_filter()
         # 6. Reorder columns (target last)
         self.reorder_columns()
-        
+
         return self.df
 
 
 if __name__ == "__main__":
-    # Configuration for Standalone Execution
-    # Define input and output file paths
-    INPUT_PATH = "data/processed/merge_ds.csv"
-    OUTPUT_PATH_CSV = "data/processed/preprocessed_ds.csv"
-    OUTPUT_PATH_EXCEL = "data/processed/preprocessed_ds.xlsx"
-
-    # Define column names for preprocessing steps
-    DATE_COL = "dt_iso"
-    COLUMNS_TO_REMOVE = ["lat", "lon", DATE_COL]
-    DUMMY_COLUMN = "weather_description"
-    FILLNA_COLUMN = ["rain_1h"]
-
-    # Assemble the preprocessing configuration dictionary
-    PREPROCESS_CONFIG = {
-        "date_col": DATE_COL,
-        "columns_to_remove": COLUMNS_TO_REMOVE,
-        "dummy_column": DUMMY_COLUMN,
-        "fill_na_column": FILLNA_COLUMN,
-    }
+    from src.config.preprocessing_config import (
+        INPUT_PATH,
+        OUTPUT_PATH_CSV,
+        OUTPUT_PATH_EXCEL,
+        PREPROCESS_CONFIG,
+    )
 
     # Load the dataset
     dataset = pd.read_csv(INPUT_PATH)
@@ -220,7 +206,7 @@ if __name__ == "__main__":
     preprocess = Preprocesser(dataset, PREPROCESS_CONFIG)
     # Run the full preprocessing pipeline
     preprocessed_df = preprocess.run()
-    
+
     # Save results
     # Save the preprocessed dataframe to a CSV file
     preprocessed_df.to_csv(OUTPUT_PATH_CSV, index=False)

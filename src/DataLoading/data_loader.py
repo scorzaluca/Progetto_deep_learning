@@ -10,9 +10,9 @@ from ..Utils import plot_cv_indices
 # fold_2: 16 training months (0-11703) + 4 validation months (11704-14623)
 # fold_3: 20 training months (0-14623) + 4 validation months (14624-17543)
 EXPANDING_WINDOW_SPLITS = [
-    (range(0, 8784), range(8784, 11704)),  
-    (range(0, 11704), range(11704, 14624)), 
-    (range(0, 14624), range(14624, 17544)), 
+    (range(0, 8784), range(8784, 11704)),
+    (range(0, 11704), range(11704, 14624)),
+    (range(0, 14624), range(14624, 17544)),
 ]
 
 
@@ -37,6 +37,7 @@ class TS_Cross_Validator:
         n_splits (int): Number of cross-validation splits to perform.
         splits (list): List of (train_indices, val_indices) tuples for the expanding window splits.
     """
+
     def __init__(self, df: pd.DataFrame, target_col: str, cfg_dict: dict):
         self.df = df
         self.target_col = target_col
@@ -48,13 +49,15 @@ class TS_Cross_Validator:
         self.n_splits = cfg_dict.get("n_splits", 3)
 
         # Custom expanding window splits
-        self.splits = EXPANDING_WINDOW_SPLITS[: self.n_splits]  # it takes the first "n_splits" from the defined global list
+        self.splits = EXPANDING_WINDOW_SPLITS[
+            : self.n_splits
+        ]  # it takes the first "n_splits" from the defined global list
 
     def visualize_splits(self):
         """
         Visualizes the cross-validation folds using a plot.
-        
-        This method generates a plot showing the training and validation indices 
+
+        This method generates a plot showing the training and validation indices
         for each fold in the expanding window cross-validation scheme.
 
         Args:
@@ -64,7 +67,7 @@ class TS_Cross_Validator:
             None: Displays a matplotlib plot.
         """
         print("Generating folds plot...")
-        
+
         split_generator = (
             (list(train_idx), list(val_idx)) for train_idx, val_idx in self.splits
         )
@@ -86,16 +89,20 @@ class TS_Cross_Validator:
                 - val_scaled_extended (pd.DataFrame): Scaled validation dataframe, prepended with the last 'lookback' samples from training.
                 - scaler (MinMaxScaler): The scaler fitted on the training data.
         """
-        #Using .iloc to select the rows corresponding to the indices
+        # Using .iloc to select the rows corresponding to the indices
         train_df = self.df.iloc[train_indices]
         val_df = self.df.iloc[val_indices]
 
         # Scaling
-        scaler = MinMaxScaler() #creating a MinMaxScaler object 
-        train_scaled = scaler.fit_transform(train_df) #learning the scaling parameters from the training data
-        val_scaled = scaler.transform(val_df) #applying the same scaling to the validation data
-        
-        #Creating DataFrames from the scaled data, because the scaler returns a numpy array 
+        scaler = MinMaxScaler()  # creating a MinMaxScaler object
+        train_scaled = scaler.fit_transform(
+            train_df
+        )  # learning the scaling parameters from the training data
+        val_scaled = scaler.transform(
+            val_df
+        )  # applying the same scaling to the validation data
+
+        # Creating DataFrames from the scaled data, because the scaler returns a numpy array
         train_scaled_df = pd.DataFrame(
             train_scaled, columns=train_df.columns, index=train_df.index
         )
@@ -103,14 +110,16 @@ class TS_Cross_Validator:
             val_scaled, columns=val_df.columns, index=val_df.index
         )
 
-        #Adding the last 'lookback' samples from training to the validation set
+        # Adding the last 'lookback' samples from training to the validation set
         last_train_samples = train_scaled_df.iloc[-self.lookback :]
         val_scaled_extended = pd.concat([last_train_samples, val_scaled_df], axis=0)
 
         # --- Logging ---
         print(f"\n---------------- FOLD {experiment_idx + 1} ----------------")
         print(f"TRAIN: {train_scaled_df.index[0]} -> {train_scaled_df.index[-1]}")
-        print(f"VAL  : {val_scaled_extended.index[0]} -> {val_scaled_extended.index[-1]}")
+        print(
+            f"VAL  : {val_scaled_extended.index[0]} -> {val_scaled_extended.index[-1]}"
+        )
 
         return train_scaled_df, val_scaled_extended, scaler
 
@@ -127,20 +136,20 @@ class TS_Cross_Validator:
                 - val_loader (DataLoader): DataLoader for the validation set of the current fold.
                 - scaler (MinMaxScaler): The scaler fitted on the training set of the current fold.
         """
-        
+
         print(f"\n=== STARTING CROSS-VALIDATION ({self.n_splits} splits) ===")
 
         for experiment_idx, (train_indices, val_indices) in enumerate(self.splits):
             splitting_result = self.split_and_normalize(
                 list(train_indices), list(val_indices), experiment_idx
-            ) #preparing raw data and scaling it for a specific fold
+            )  # preparing raw data and scaling it for a specific fold
 
             if splitting_result[0] is None:
                 continue
 
             train_scaled_df, val_scaled_extended, scaler = splitting_result
 
-            #Creating PVForecastDataset instances for train and validation
+            # Creating PVForecastDataset instances for train and validation
             train_dataset = PVForecastDataset(
                 train_scaled_df,
                 self.target_col,
@@ -156,9 +165,8 @@ class TS_Cross_Validator:
                 self.step_val,
             )
 
-            
-            use_pin_memory = torch.cuda.is_available() #GPU support check
-            #Creating PyTorch DataLoaders for training setting shuffle=True
+            use_pin_memory = torch.cuda.is_available()  # GPU support check
+            # Creating PyTorch DataLoaders for training setting shuffle=True
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=self.batch_size,
@@ -167,7 +175,7 @@ class TS_Cross_Validator:
                 pin_memory=use_pin_memory,
                 num_workers=0,
             )
-            #Creating PyTorch DataLoaders for validation setting shuffle=False
+            # Creating PyTorch DataLoaders for validation setting shuffle=False
             val_loader = DataLoader(
                 val_dataset,
                 batch_size=self.batch_size,
@@ -179,7 +187,7 @@ class TS_Cross_Validator:
 
             print(f"Fold {experiment_idx + 1} ready. Yielding...")
 
-            #Returning to the caller the complete package to start training on this fold.
+            # Returning to the caller the complete package to start training on this fold.
             yield train_loader, val_loader, scaler
 
 
@@ -218,25 +226,29 @@ def create_final_train_val_loaders(
     """
     train_range, val_range = FINAL_TRAINING_SPLIT
 
-    #Using .iloc to select the rows corresponding to the indices
+    # Using .iloc to select the rows corresponding to the indices
     train_df = df.iloc[list(train_range)]
     val_df = df.iloc[list(val_range)]
 
-    scaler = MinMaxScaler() #creating a MinMaxScaler object 
-    train_scaled = scaler.fit_transform(train_df) #learning the scaling parameters from the training data
-    val_scaled = scaler.transform(val_df) #applying the same scaling to the validation data
+    scaler = MinMaxScaler()  # creating a MinMaxScaler object
+    train_scaled = scaler.fit_transform(
+        train_df
+    )  # learning the scaling parameters from the training data
+    val_scaled = scaler.transform(
+        val_df
+    )  # applying the same scaling to the validation data
 
-    #Creating DataFrames from the scaled data, because the scaler returns a numpy array 
+    # Creating DataFrames from the scaled data, because the scaler returns a numpy array
     train_scaled_df = pd.DataFrame(
         train_scaled, columns=train_df.columns, index=train_df.index
     )
     val_scaled_df = pd.DataFrame(val_scaled, columns=val_df.columns, index=val_df.index)
 
-    #Adding the last 'lookback' samples from training to the validation set
+    # Adding the last 'lookback' samples from training to the validation set
     last_train_samples = train_scaled_df.iloc[-lookback:]
     val_scaled_extended = pd.concat([last_train_samples, val_scaled_df], axis=0)
 
-    #Creating PVForecastDataset instances for train and validation
+    # Creating PVForecastDataset instances for train and validation
     train_dataset = PVForecastDataset(
         train_scaled_df, target_col, lookback, horizon, step_train
     )
@@ -244,8 +256,8 @@ def create_final_train_val_loaders(
         val_scaled_extended, target_col, lookback, horizon, step_val
     )
 
-    use_pin_memory = torch.cuda.is_available() #GPU support check
-    #Creating PyTorch DataLoaders for training setting shuffle=True
+    use_pin_memory = torch.cuda.is_available()  # GPU support check
+    # Creating PyTorch DataLoaders for training setting shuffle=True
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -254,7 +266,7 @@ def create_final_train_val_loaders(
         pin_memory=use_pin_memory,
         num_workers=0,
     )
-    #Creating PyTorch DataLoaders for validation setting shuffle=False
+    # Creating PyTorch DataLoaders for validation setting shuffle=False
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
@@ -282,7 +294,7 @@ def create_test_loader(
 ):
     """
     Creates a DataLoader for the test set, using a scaler fitted on the entire training data.
-    
+
     Args:
         train_df (pd.DataFrame): DataFrame containing ALL training data (22+2 months = entire original dataset).
         test_df (pd.DataFrame): DataFrame containing the test data (already preprocessed).
@@ -297,23 +309,23 @@ def create_test_loader(
             - test_loader (DataLoader): DataLoader for the test set.
             - scaler (MinMaxScaler): The scaler fitted on the entire training data (used for denormalization).
     """
-    #Fit scaler on ALL training data
+    # Fit scaler on ALL training data
     scaler = MinMaxScaler()
     scaler.fit(train_df)
 
-    #Transform test data
+    # Transform test data
     test_scaled = scaler.transform(test_df)
     test_scaled_df = pd.DataFrame(
         test_scaled, columns=test_df.columns, index=test_df.index
     )
 
-    #Create dataset
+    # Create dataset
     test_dataset = PVForecastDataset(
         test_scaled_df, target_col, lookback, horizon, step
     )
 
-    use_pin_memory = torch.cuda.is_available() #GPU support check
-    #Create DataLoader
+    use_pin_memory = torch.cuda.is_available()  # GPU support check
+    # Create DataLoader
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
