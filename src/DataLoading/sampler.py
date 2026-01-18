@@ -25,6 +25,7 @@ class PVForecastDataset(Dataset):
         total_window (int): Total length of a sample (lookback + horizon).
         num_samples (int): Total number of valid samples in the dataset.
     """
+
     def __init__(
         self,
         data: pd.DataFrame,

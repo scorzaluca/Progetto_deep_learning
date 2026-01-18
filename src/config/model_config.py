@@ -13,6 +13,7 @@ HORIZON = 24  # Forecast horizon size (Target Y)
 # After dropping weather_description_other (dummy trap)
 INPUT_SIZE = 24  # Number of features in the dataset (columns)
 TARGET_IDX = 23  # Index of the pv_power column (target)
+GHI_IDX = 10  # Index of the Ghi column (for night detection)
 
 # --- LSTM ---
 # Bidirectional processes lookback in both directions
@@ -22,7 +23,7 @@ LSTM_CONFIG = {
     "output_size": HORIZON,
     "num_layers": 1,
     "dropout": 0.0,
-    "bidirectional": False, # True doubles hidden_size
+    "bidirectional": False,  # True doubles hidden_size
 }
 
 # --- DLinear ---
@@ -39,8 +40,8 @@ DLINEAR_CONFIG = {
 PATCHTST_CONFIG = {
     "num_channels": INPUT_SIZE,
     "target_idx": TARGET_IDX,
-    "patch_length": 16,  
-    "stride": 4,  
+    "patch_length": 16,
+    "stride": 4,
     "d_model": 128,
     "n_heads": 8,
     "n_layers": 4,

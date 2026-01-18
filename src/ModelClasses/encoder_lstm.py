@@ -3,7 +3,6 @@ import torch.nn as nn
 from ..config import HORIZON, INPUT_SIZE, PATCHTST_CONFIG
 
 
-
 class EncoderLSTM(nn.Module):
     """
     Hybrid model combining a pretrained PatchTST encoder (optionally frozen) with an LSTM head.
@@ -39,13 +38,12 @@ class EncoderLSTM(nn.Module):
     def __init__(self, model_config: dict):
         super().__init__()
 
-        
         from .patchtst_pretraining import PatchTSTPretraining
 
         # Extract configuration parameters
         self.pretrain_path = model_config.get("pretrain_path")
         self.d_model = model_config.get("d_model", 128)
-        self.projection_dim = model_config.get("projection_dim", 64) 
+        self.projection_dim = model_config.get("projection_dim", 64)
         self.lstm_hidden = model_config.get("lstm_hidden", 64)
         self.lstm_layers = model_config.get("lstm_layers", 1)
         self.dropout = model_config.get("dropout", 0.2)
@@ -58,13 +56,13 @@ class EncoderLSTM(nn.Module):
         if self.pretrain_path:
             print(f"Loading encoder from: {self.pretrain_path}")
             encoder_state = torch.load(self.pretrain_path, map_location="cpu")
-            
+
             # Load the weights into the specific encoder submodule
             # strict=False allows ignoring heads/other layers that don't match exactly
             self.encoder.model.model.encoder.load_state_dict(
                 encoder_state, strict=False
             )
-            
+
             # Freeze the encoder weights if requested
             if self.freeze_encoder:
                 for param in self.encoder.parameters():
@@ -72,7 +70,7 @@ class EncoderLSTM(nn.Module):
 
         self.is_pretrained = bool(self.pretrain_path) and not self.freeze_encoder
 
-        #Projection Layer: Reduces dimension from (d_model * num_channels) to projection_dim
+        # Projection Layer: Reduces dimension from (d_model * num_channels) to projection_dim
         # This layer learns how to combine representations from different channels
         self.embedding_dim = self.d_model * INPUT_SIZE  # e.g., 128 * 24 = 3072
         self.projection = nn.Linear(self.embedding_dim, self.projection_dim)
@@ -98,12 +96,19 @@ class EncoderLSTM(nn.Module):
         """
         Computes the forward pass of the EncoderLSTM model.
 
+        Includes physical constraints:
+        1. Night detection: Zero out predictions for hours when GHI=0 in the last 24h
+        2. Non-negativity: Force all predictions >= 0 via ReLU
+
         Args:
             x (torch.Tensor): Input tensor of shape (Batch, Lookback, Channels).
 
         Returns:
             torch.Tensor: Predicted tensor of shape (Batch, Horizon, 1).
         """
+        # Import here to avoid circular dependency
+        from ..config import GHI_IDX, HORIZON
+
         if self.freeze_encoder:
             # Extract embeddings from the frozen encoder
             # If frozen, we use the helper method to use the encoder as a feature extractor
@@ -114,9 +119,9 @@ class EncoderLSTM(nn.Module):
                 past_values=x,
                 output_hidden_states=True,
             )
-            hidden = outputs.last_hidden_state # The output of the encoder. Shape: (batch, num_channels, num_patches, d_model)
+            hidden = outputs.last_hidden_state  # The output of the encoder. Shape: (batch, num_channels, num_patches, d_model)
             batch_size, num_channels, num_patches, d_model = hidden.shape
-            
+
             # Reshape to combine channels for each patch
             # We want one vector per patch containing info from ALL channels
             # Shape becomes: (batch, num_patches, num_channels * d_model)
@@ -124,7 +129,9 @@ class EncoderLSTM(nn.Module):
 
         # Project channel-concatenated embeddings to a smaller dimension
         # Reduces dimensionality to allow LSTM to process it efficiently
-        embeddings = self.projection(embeddings)  # Shape: (batch, n_patches, projection_dim)
+        embeddings = self.projection(
+            embeddings
+        )  # Shape: (batch, n_patches, projection_dim)
 
         # Process the sequence of patches with LSTM
         # The LSTM captures temporal dependencies between the patches
@@ -136,7 +143,29 @@ class EncoderLSTM(nn.Module):
 
         # Generate forecasts for the horizon using the final linear head
         predictions = self.head(last_out)  # Shape: (batch, horizon)
-        
+
+        # =================================================================
+        # PHYSICAL CONSTRAINT 1: Night Detection
+        # If GHI was 0 for a given hour in the last 24h, assume same hour
+        # tomorrow is also night -> prediction should be 0
+        # =================================================================
+        # Extract GHI from the last 24 hours of input
+        # x shape: (batch, lookback, channels), take last 24 timesteps
+        ghi_last_24h = x[:, -HORIZON:, GHI_IDX]  # Shape: (batch, 24)
+
+        # Create night mask: True where GHI = 0 (normalized value near 0)
+        # Using threshold to handle floating point comparison
+        night_mask = ghi_last_24h < 0.01  # Shape: (batch, 24)
+
+        # Apply mask: set predictions to 0 where it was night
+        predictions = predictions * (~night_mask).float()
+
+        # =================================================================
+        # PHYSICAL CONSTRAINT 2: Non-negativity
+        # Force any remaining negative predictions to 0
+        # =================================================================
+        predictions = torch.relu(predictions)
+
         predictions = predictions.unsqueeze(-1)  # Shape: (batch, horizon, 1)
 
         return predictions

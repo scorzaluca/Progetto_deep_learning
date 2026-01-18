@@ -37,7 +37,7 @@ def evaluate_model(model, val_loader, device, scaler=None, target_idx=None):
 
             # Forward pass: Generate predictions
             outputs = model(batch_x)
-            
+
             # Move to CPU and convert to NumPy for easier handling
             preds = outputs.cpu().numpy()
             targets = batch_y.numpy()
@@ -50,13 +50,17 @@ def evaluate_model(model, val_loader, device, scaler=None, target_idx=None):
     all_preds = np.concatenate(all_preds, axis=0)
     all_targets = np.concatenate(all_targets, axis=0)
 
-    # Optional Denormalization 
+    # Clip predictions: Force negative values to 0 (physical constraint: PV power >= 0)
+    # This is applied BEFORE any metrics calculation and BEFORE denormalization
+    all_preds = np.maximum(all_preds, 0)
+
+    # Optional Denormalization
     # If the scaler is provided, we convert the predictions back to the original scale (Watts).
     # This is crucial because metrics like MAE should be interpretable in the real world.
     if scaler is not None and target_idx is not None:
         # The MinMaxScaler formula is: X_scaled = (X - X_min) / (X_max - X_min)
         # To invert it: X = X_scaled * (X_max - X_min) + X_min
-        
+
         # We extract min and max only for the target column (pv_power)
         data_min = scaler.data_min_[target_idx]
         data_max = scaler.data_max_[target_idx]

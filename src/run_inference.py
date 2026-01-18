@@ -181,6 +181,71 @@ def calculate_metrics(
     }
 
 
+def save_predictions_to_excel(
+    predictions: np.ndarray,
+    timestamps: pd.Series,
+    lookback: int,
+    horizon: int,
+    save_path: str,
+) -> None:
+    """
+    Saves predictions to an Excel file with timestamps and hourly forecast columns.
+
+    Creates a DataFrame with 25 columns:
+    - Column 1: datetime (timestamp in UTC+10 Sydney timezone)
+    - Columns 2-25: predictions for t+1, t+2, ..., t+24
+
+    The first (lookback - 1) rows will have NaN for all prediction columns,
+    since they don't have enough historical data for the lookback window.
+
+    Args:
+        predictions (np.ndarray): Array of predictions with shape (N, horizon) or (N, horizon, 1).
+        timestamps (pd.Series): Series of datetime strings from the original test data.
+        lookback (int): Lookback window size (e.g., 48).
+        horizon (int): Prediction horizon (e.g., 24).
+        save_path (str): Path to save the Excel file.
+
+    Returns:
+        None
+    """
+    # Squeeze predictions if they have an extra dimension
+    if predictions.ndim == 3:
+        predictions = predictions.squeeze(-1)  # (N, horizon, 1) -> (N, horizon)
+
+    # Number of rows that cannot be predicted (not enough lookback)
+    n_unpredictable = lookback - 1  # 48 - 1 = 47
+    n_total_rows = len(timestamps)
+
+    # Create column names
+    columns = ["datetime"] + [f"t+{h}" for h in range(1, horizon + 1)]
+
+    # Initialize DataFrame with NaN
+    df = pd.DataFrame(index=range(n_total_rows), columns=columns)
+
+    # Fill datetime column with timestamps (already in UTC+10 Sydney)
+    df["datetime"] = timestamps.values
+
+    # Fill predictions starting from row (lookback - 1)
+    # The first valid prediction corresponds to timestep = lookback - 1
+    # Because we need lookback samples [0:lookback] to predict [lookback:lookback+horizon]
+    for i, pred in enumerate(predictions):
+        row_idx = n_unpredictable + i
+        if row_idx < n_total_rows:
+            for h in range(horizon):
+                df.loc[row_idx, f"t+{h + 1}"] = pred[h]
+
+    # Convert prediction columns to float (they were object due to NaN initialization)
+    for h in range(1, horizon + 1):
+        df[f"t+{h}"] = pd.to_numeric(df[f"t+{h}"], errors="coerce")
+
+    # Save to Excel
+    df.to_excel(save_path, index=False)
+    print(f"Predictions saved to Excel: {save_path}")
+    print(f"   Total rows: {n_total_rows}")
+    print(f"   Unpredictable rows (NaN): {n_unpredictable}")
+    print(f"   Predicted rows: {len(predictions)}")
+
+
 def main():
     """
     Main execution pipeline for Test Inference.
@@ -213,6 +278,17 @@ def main():
     print(f"   Shape: {train_df.shape}")
 
     # Load and Preprocess Test Data
+    # First, load raw data to extract timestamps before preprocessing removes them
+    if TEST_DATA_PATH.endswith((".xlsx", ".xls")):
+        raw_test_df = pd.read_excel(TEST_DATA_PATH)
+    else:
+        raw_test_df = pd.read_csv(TEST_DATA_PATH)
+
+    # Extract timestamps (dt_iso column) before preprocessing
+    # These are in UTC+10 (Sydney) timezone
+    timestamps = raw_test_df["dt_iso"]
+
+    # Now preprocess the test data
     test_df = load_and_preprocess_test(TEST_DATA_PATH)
 
     # Verify column consistency:
@@ -325,6 +401,18 @@ def main():
         predictions_denorm,
         targets_denorm,
         save_path=os.path.join(results_dir, "error_distribution.png"),
+    )
+
+    # Save Predictions to Excel
+    # Creates a file with 25 columns: datetime (UTC+10), t+1, t+2, ..., t+24
+    # First 47 rows have NaN (not enough lookback data)
+    print("\n Saving Predictions to Excel...")
+    save_predictions_to_excel(
+        predictions=predictions_denorm,
+        timestamps=timestamps,
+        lookback=LOOKBACK,
+        horizon=HORIZON,
+        save_path=os.path.join(results_dir, "predictions.xlsx"),
     )
 
     print("\nInference Completed!")
