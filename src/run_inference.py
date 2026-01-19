@@ -34,7 +34,7 @@ from .Utils import set_seed, get_device, plot_test_predictions, plot_error_distr
 
 
 # =============================================================================
-# CONFIGURATION - MODIFY THESE VALUES BEFORE RUNNING
+# CONFIGURATION
 # =============================================================================
 # Path to the TRAINING dataset (Required to fit the Scaler correctly)
 # We must use the same scaling parameters (mean, std) as seen during training.
@@ -45,7 +45,7 @@ TEST_DATA_PATH = "data/processed/merged_test_ds.csv"
 
 # Path to the trained model weights (.pth file)
 # This file contains the learnable parameters (weights/biases) saved after training.
-CHECKPOINT_PATH = "results/checkpoints/encoderlstm_48_final_100_epochs.pth"
+CHECKPOINT_PATH = "results/checkpoints/encoderlstm_48_run_3_model_ghi.pth"
 
 # Path to the hyperparameter file (.json)
 # This file contains the structural config (hidden_size, n_layers, etc.) needed to rebuild the model architecture.

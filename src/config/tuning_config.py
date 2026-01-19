@@ -23,7 +23,7 @@ PATIENCE = 8  # Early stopping patience
 # =============================================================================
 # Study Name (used for saving/resuming)
 # Change this name for each new optimization run of the same model
-STUDY_NAME = "encoderlstm_48_run_3"
+STUDY_NAME = "encoderlstm_48_run_2"
 
 # If True, creates a new study (deletes existing study with same name)
 # If False, resumes existing study (to continue interrupted optimization)
